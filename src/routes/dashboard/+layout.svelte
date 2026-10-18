@@ -11,7 +11,7 @@
 		WalletCards
 	} from '@lucide/svelte';
 	import { page } from '$app/state';
-	import { creditBalance } from '#lib/stores/session.js';
+	import { demoSubscription } from '#lib/data/billing.js';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
@@ -100,7 +100,7 @@
 					class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-indigo-200 hover:text-indigo-700 sm:text-sm"
 				>
 					<WalletCards size={16} />
-					<span>{$creditBalance} kredit</span>
+					<span>{demoSubscription.paygCredits} kredit</span>
 					<Plus size={14} class="text-indigo-600" />
 				</a>
 				<button

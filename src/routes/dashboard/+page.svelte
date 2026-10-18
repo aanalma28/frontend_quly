@@ -10,8 +10,14 @@
 		MoreHorizontal,
 		Plus,
 		Sparkles,
-		Target
+		Target,
+		WalletCards
 	} from '@lucide/svelte';
+	import { demoSubscription, formatRupiah } from '#lib/data/billing.js';
+
+	const quotaPercent = Math.round(
+		(demoSubscription.remainingApplications / demoSubscription.monthlyQuota) * 100
+	);
 
 	const metrics = [
 		{
@@ -111,6 +117,91 @@
 		<span class="shrink-0 rounded-md bg-amber-100 px-2 py-0.5 font-bold">DATA DEMO</span>
 		<span>Angka dan riwayat di halaman ini adalah contoh tampilan, belum berasal dari backend.</span>
 	</div>
+
+	<section class="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]" aria-label="Status paket dan kredit">
+		<article class="rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm shadow-slate-100/70 sm:p-6">
+			<div class="flex flex-wrap items-start justify-between gap-4">
+				<div class="flex items-start gap-3">
+					<span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+						<Sparkles size={20} />
+					</span>
+					<div>
+						<p class="text-xs font-medium text-slate-500">Paket aktif</p>
+						<h2 class="mt-0.5 text-lg font-bold tracking-tight text-slate-950">
+							{demoSubscription.planName}
+						</h2>
+					</div>
+				</div>
+				<span class="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700">
+					Aktif
+				</span>
+			</div>
+
+			<div class="mt-5 flex items-end justify-between gap-3">
+				<div>
+					<p class="text-sm font-semibold text-slate-800">
+						{demoSubscription.remainingApplications} / {demoSubscription.monthlyQuota} lamaran tersisa
+					</p>
+					<p class="mt-1 text-xs text-slate-500">Kuota bulananmu masih cukup untuk melangkah.</p>
+				</div>
+				<span class="text-xs font-semibold text-indigo-700">{quotaPercent}%</span>
+			</div>
+			<div
+				class="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"
+				role="progressbar"
+				aria-label="Sisa kuota lamaran bulanan"
+				aria-valuemin={0}
+				aria-valuemax={demoSubscription.monthlyQuota}
+				aria-valuenow={demoSubscription.remainingApplications}
+			>
+				<div class="h-full rounded-full bg-indigo-500 transition-all" style:width="{quotaPercent}%"></div>
+			</div>
+			<div class="mt-5 flex flex-wrap gap-2">
+				<a
+					href="/billing#paket"
+					class="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-3.5 text-xs font-semibold text-white transition hover:bg-indigo-700"
+				>
+					Upgrade Paket <ArrowRight size={14} />
+				</a>
+				<a
+					href="/billing#kredit-kilat"
+					class="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 px-3.5 text-xs font-semibold text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+				>
+					Top-up Kredit <Plus size={14} />
+				</a>
+			</div>
+		</article>
+
+		<article class="flex flex-col justify-between rounded-2xl border border-violet-100 bg-gradient-to-br from-white to-violet-50/60 p-5 shadow-sm shadow-slate-100/70 sm:p-6">
+			<div>
+				<div class="flex items-center justify-between gap-3">
+					<div class="flex items-center gap-3">
+						<span class="flex size-10 items-center justify-center rounded-xl bg-violet-100 text-violet-700">
+							<WalletCards size={19} />
+						</span>
+						<div>
+							<p class="text-xs font-medium text-slate-500">Saldo Kredit Kilat</p>
+							<p class="mt-0.5 text-xl font-bold tracking-tight text-slate-950">
+								{formatRupiah(demoSubscription.paygBalance)}
+							</p>
+						</div>
+					</div>
+					<span class="rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold text-violet-700 ring-1 ring-violet-100">
+						{demoSubscription.paygCredits} kredit
+					</span>
+				</div>
+				<p class="mt-4 text-xs leading-5 text-slate-500">
+					Siap digunakan untuk aksi lamaran email saat kuota bulanan habis.
+				</p>
+			</div>
+			<a
+				href="/billing#kredit-kilat"
+				class="mt-5 inline-flex h-9 w-fit items-center justify-center gap-2 rounded-lg border border-violet-200 bg-white px-3.5 text-xs font-semibold text-violet-700 transition hover:bg-violet-50"
+			>
+				Top-up Kredit <ArrowRight size={14} />
+			</a>
+		</article>
+	</section>
 
 	<section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Ringkasan metrik">
 		{#each metrics as metric}
