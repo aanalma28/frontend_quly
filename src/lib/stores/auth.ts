@@ -1,6 +1,12 @@
 import { goto } from '$app/navigation';
 import { writable } from 'svelte/store';
 import { ApiError, apiRequest, getApiUrl } from '#lib/utils/api.js';
+import {
+	EmailAuthFlow,
+	googleOAuthUrl,
+	normalizeEmail,
+	type RegisterEmailDetails
+} from '#lib/utils/email-auth.js';
 
 const ACCESS_TOKEN_KEY = 'auth_access_token';
 const REFRESH_TOKEN_KEY = 'auth_refresh_token';
@@ -34,6 +40,7 @@ export const auth = writable<AuthState>({
 });
 
 let initialization: Promise<boolean> | null = null;
+const emailAuthFlow = new EmailAuthFlow(apiRequest);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -110,22 +117,6 @@ function normalizeUser(value: unknown): AuthUser {
 	};
 }
 
-function extractTokenResponse(value: unknown): {
-	accessToken: string;
-	refreshToken: string | null;
-} {
-	if (!isRecord(value)) throw new Error('Respons autentikasi dari backend tidak valid.');
-	const nested = isRecord(value.data) ? value.data : value;
-	const accessToken = readString(nested, 'accessToken', 'access_token', 'token');
-	if (!accessToken) throw new Error('Backend tidak mengembalikan access token.');
-
-	const refreshToken = readString(nested, 'refreshToken', 'refresh_token') ?? null;
-	return {
-		accessToken,
-		refreshToken
-	};
-}
-
 export function saveAuthTokens(accessToken: string, refreshToken: string | null) {
 	localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
 	if (refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
@@ -180,12 +171,7 @@ export async function login(
 ): Promise<void> {
 	auth.update((state) => ({ ...state, isLoading: true, error: null }));
 	try {
-		const response = await apiRequest('auth/login', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ email, password })
-		});
-		const result = extractTokenResponse(await response.json());
+		const result = await emailAuthFlow.login(email, password);
 		saveAuthTokens(result.accessToken, result.refreshToken);
 		auth.set({
 			user: null,
@@ -195,7 +181,8 @@ export async function login(
 			error: null
 		});
 		await fetchUserProfile();
-		const safeRedirect = redirectTo.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : '/dashboard';
+		const safeRedirect =
+			redirectTo.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : '/dashboard';
 		await goto(safeRedirect, { invalidateAll: true });
 	} catch (error) {
 		auth.update((state) => ({ ...state, isLoading: false, error: errorMessage(error) }));
@@ -203,26 +190,40 @@ export async function login(
 	}
 }
 
+export async function requestEmailVerificationCode(email: string): Promise<void> {
+	await emailAuthFlow.sendCode(email);
+}
+
+export async function verifyEmailVerificationCode(email: string, code: string): Promise<void> {
+	await emailAuthFlow.verifyCode(email, code);
+}
+
 export async function register(
 	email: string,
 	password: string,
-	options: { fullName?: string; acceptedTerms?: boolean; redirectTo?: string } = {}
+	details: RegisterEmailDetails
 ): Promise<void> {
-	await apiRequest('auth/register', {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({
-			email,
-			password,
-			...(options.fullName ? { full_name: options.fullName } : {}),
-			...(options.acceptedTerms ? { accepted_terms: true } : {})
-		})
-	});
-	await login(email, password, options.redirectTo ?? '/onboarding');
+	auth.update((state) => ({ ...state, isLoading: true, error: null }));
+	try {
+		const result = await emailAuthFlow.register(email, password, details);
+		saveAuthTokens(result.accessToken, result.refreshToken);
+		auth.set({
+			user: null,
+			isAuthenticated: true,
+			token: result.accessToken,
+			isLoading: false,
+			error: null
+		});
+		await fetchUserProfile();
+		await goto('/onboarding', { invalidateAll: true });
+	} catch (error) {
+		auth.update((state) => ({ ...state, isLoading: false, error: errorMessage(error) }));
+		throw error;
+	}
 }
 
 export function loginWithGoogle(): void {
-	window.location.assign(getApiUrl('auth/google'));
+	window.location.assign(googleOAuthUrl(getApiUrl('')));
 }
 
 export async function completeOAuthLogin(accessToken: string, refreshToken: string | null = null) {
@@ -265,6 +266,8 @@ export const authStore = {
 	subscribe: auth.subscribe,
 	login,
 	register,
+	requestEmailVerificationCode,
+	verifyEmailVerificationCode,
 	loginWithGoogle,
 	fetchUserProfile,
 	logout

@@ -1,21 +1,29 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { login } from '#lib/stores/auth.js';
-	import { getApiUrl } from '#lib/utils/api.js';
+	import { ApiError, getApiUrl } from '#lib/utils/api.js';
+	import { isUnverifiedEmailError, normalizeEmail } from '#lib/utils/email-auth.js';
 	import AuthShell from '$lib/components/auth/AuthShell.svelte';
 	import GoogleButton from '$lib/components/auth/GoogleButton.svelte';
 	import FormField from '$lib/components/ui/FormField.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 
-	let email = $state('');
+	let email = $state(page.url.searchParams.get('email') ?? '');
 	let password = $state('');
 	let submitting = $state(false);
+	let validationAttempted = $state(false);
+	let statusMessage = $state<string | null>(
+		page.url.searchParams.get('verified') === '1'
+			? 'Email berhasil diverifikasi. Silakan masuk dengan kata sandi.'
+			: null
+	);
 	let formError = $state<string | null>(
 		page.url.searchParams.get('error') === 'OAuthFailed'
 			? 'Masuk dengan Google belum berhasil. Silakan coba lagi.'
 			: null
 	);
-	let fieldErrors = $state<{ email?: string; password?: string }>({});
+	const fieldErrors = $derived(validationAttempted ? getFieldErrors() : {});
 
 	const redirectTo = $derived(page.url.searchParams.get('redirectTo') || '/dashboard');
 
@@ -23,7 +31,7 @@
 		window.location.href = getApiUrl('/auth/google');
 	}
 
-	function validate(): boolean {
+	function getFieldErrors(): { email?: string; password?: string } {
 		const errors: { email?: string; password?: string } = {};
 
 		if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
@@ -33,25 +41,38 @@
 			errors.password = 'Password is required.';
 		}
 
-		fieldErrors = errors;
+		return errors;
+	}
+
+	function validate(): boolean {
+		validationAttempted = true;
+		const errors = getFieldErrors();
 		return Object.keys(errors).length === 0;
 	}
 
 	async function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
 		formError = null;
+		statusMessage = null;
 
 		if (!validate()) return;
 
 		submitting = true;
 		try {
-			await login(email.trim(), password, redirectTo);
+			await login(normalizeEmail(email), password, redirectTo);
 		} catch (error) {
+			if (error instanceof ApiError && isUnverifiedEmailError(error.status, error.message)) {
+				const params = new URLSearchParams({
+					verifyEmail: '1',
+					email: normalizeEmail(email)
+				});
+				await goto(`/auth/register?${params.toString()}`);
+				return;
+			}
 			formError =
 				error instanceof Error && error.message
 					? error.message
 					: 'Unable to sign in right now. Please try again.';
-			fieldErrors = {};
 		} finally {
 			submitting = false;
 		}
@@ -59,7 +80,23 @@
 </script>
 
 <AuthShell title="Welcome back" subtitle="Sign in to continue to your job hunt">
-	<form class="space-y-4" onsubmit={handleSubmit} novalidate>
+	<form
+		class="space-y-4"
+		onsubmit={handleSubmit}
+		oninput={() => {
+			formError = null;
+			statusMessage = null;
+		}}
+		novalidate
+	>
+		{#if statusMessage}
+			<div
+				class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
+				role="status"
+			>
+				{statusMessage}
+			</div>
+		{/if}
 		{#if formError}
 			<div
 				class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"

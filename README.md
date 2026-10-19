@@ -54,6 +54,9 @@ The backend must allow requests from the frontend origin and redirect Google OAu
 
 ```bash
 npm run check
+npm test
 npm run build
 npm run preview
 ```
+
+The authentication flow tests use Node.js 22's built-in TypeScript stripping support.
