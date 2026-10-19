@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { auth, initializeAuth, logout } from '#lib/stores/auth.js';
 	import {
 		ArrowDown,
 		ArrowRight,
@@ -69,6 +70,7 @@
 	}
 
 	onMount(() => {
+		void initializeAuth();
 		document.documentElement.classList.add('landing-page');
 		return () => document.documentElement.classList.remove('landing-page');
 	});
@@ -97,10 +99,24 @@
 			</div>
 
 			<div class="nav-actions">
-				<a class="login-link" href="/auth/login">Masuk</a>
-				<a class="button button-small" href="/auth/register">
-					Mulai gratis <ArrowRight size={15} />
-				</a>
+				{#if $auth.isAuthenticated}
+					<a
+						class="login-link"
+						href="/auth/login"
+						onclick={(event) => {
+							event.preventDefault();
+							void logout();
+						}}>Keluar</a
+					>
+					<a class="button button-small" href="/dashboard">
+						Dashboard <ArrowRight size={15} />
+					</a>
+				{:else}
+					<a class="login-link" href="/auth/login">Masuk</a>
+					<a class="button button-small" href="/auth/register">
+						Mulai gratis <ArrowRight size={15} />
+					</a>
+				{/if}
 			</div>
 		</nav>
 	</header>

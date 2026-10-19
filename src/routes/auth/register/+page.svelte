@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { ApiError, apiRequest } from '$lib/utils/api';
+	import { loginWithGoogle, register } from '#lib/stores/auth.js';
 	import AuthShell from '$lib/components/auth/AuthShell.svelte';
 	import GoogleButton from '$lib/components/auth/GoogleButton.svelte';
 	import FormField from '$lib/components/ui/FormField.svelte';
@@ -52,20 +51,13 @@
 
 		submitting = true;
 		try {
-			await apiRequest('auth/register', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					full_name: fullName.trim(),
-					email: email.trim(),
-					password,
-					accepted_terms: true
-				})
+			await register(email.trim(), password, {
+				fullName: fullName.trim(),
+				acceptedTerms: true
 			});
-			await goto('/onboarding', { invalidateAll: true });
 		} catch (error) {
 			formError =
-				error instanceof ApiError && error.status < 500
+				error instanceof Error && error.message
 					? error.message
 					: 'Unable to create your account right now. Please try again.';
 			fieldErrors = {};
@@ -165,7 +157,7 @@
 		<span class="h-px flex-1 bg-zinc-200"></span>
 	</div>
 
-	<GoogleButton disabled={submitting} label="Sign up with Google" />
+	<GoogleButton disabled={submitting} label="Sign up with Google" onclick={loginWithGoogle} />
 
 	{#snippet footer()}
 		<p>

@@ -86,15 +86,6 @@ export const creditTopUpPackages = [
 	{ id: 'plus-credit', amount: 25000, credits: 50, label: 'Paket Pejuang', bonus: 'Lebih Hemat!' }
 ] as const;
 
-export const demoSubscription = {
-	planId: 'pro',
-	planName: 'Panglima Karier',
-	remainingApplications: 120,
-	monthlyQuota: 200,
-	paygBalance: 15000,
-	paygCredits: 30
-} as const;
-
 export function formatRupiah(amount: number): string {
 	return new Intl.NumberFormat('id-ID', {
 		style: 'currency',

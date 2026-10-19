@@ -1,16 +1,33 @@
 <script lang="ts">
+	import { getApiUrl } from '#lib/utils/api.js';
+
 	interface Props {
 		href?: string;
 		disabled?: boolean;
 		label?: string;
+		onclick?: () => void;
 	}
 
-	let { href = '/api/auth/oauth/google', disabled = false, label = 'Continue with Google' }: Props =
-		$props();
+	let {
+		href = getApiUrl('auth/google'),
+		disabled = false,
+		label = 'Continue with Google',
+		onclick
+	}: Props = $props();
 </script>
 
 <a
 	{href}
+	onclick={(event) => {
+		if (disabled) {
+			event.preventDefault();
+			return;
+		}
+		if (onclick) {
+			event.preventDefault();
+			onclick();
+		}
+	}}
 	aria-disabled={disabled}
 	class="flex w-full items-center justify-center gap-3 rounded-lg border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 {disabled
 		? 'pointer-events-none opacity-60'

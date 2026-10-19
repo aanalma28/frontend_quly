@@ -7,7 +7,7 @@ Frontend application for **AI Job Hunter**, built with **SvelteKit**, **TypeScri
 - SvelteKit with TypeScript
 - Tailwind CSS v4
 - Lucide icons (`@lucide/svelte`)
-- Svelte stores for session and credit state
+- Svelte stores for authentication and user profile state
 - Fetch API for backend requests
 
 ## Project structure
@@ -16,7 +16,7 @@ Frontend application for **AI Job Hunter**, built with **SvelteKit**, **TypeScri
 src/
 ├── lib/
 │   ├── components/       # Reusable UI components
-│   ├── stores/           # Session and credit stores
+│   ├── stores/           # Authentication and user stores
 │   └── utils/            # API helpers
 └── routes/
     ├── auth/             # Login, register, and OAuth callback
@@ -29,7 +29,8 @@ src/
     └── billing/          # Credit top-up and token packages
 ```
 
-The routes establish the application structure. Backend-dependent workflows are marked as pending integration.
+Email/password authentication, Google OAuth, callback handling, and profile loading are connected to the
+NestJS REST API. Other backend-dependent workflows may still require their own API integration.
 
 ## Requirements
 
@@ -44,7 +45,10 @@ cp .env.example .env
 npm run dev -- --open
 ```
 
-Set `VITE_API_BASE_URL` in `.env` to the backend API URL. The default is `http://localhost:3000/api`.
+Set `PUBLIC_API_URL` in `.env` to the backend API base URL (for example,
+`http://localhost:3000/api`). The frontend uses this URL for authentication and API requests.
+The backend must allow requests from the frontend origin and redirect Google OAuth back to
+`/auth/callback` with an access token in the query string.
 
 ## Validate and build
 

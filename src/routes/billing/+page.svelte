@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
+	import { get } from 'svelte/store';
 	import {
 		ArrowLeft,
 		ArrowRight,
@@ -10,9 +13,9 @@
 		Wallet,
 		Zap
 	} from '@lucide/svelte';
+	import { auth, initializeAuth } from '#lib/stores/auth.js';
 	import {
 		creditTopUpPackages,
-		demoSubscription,
 		formatRupiah,
 		subscriptionPlans
 	} from '#lib/data/billing.js';
@@ -21,6 +24,12 @@
 	let selectedTopUpId = $state<string | null>(null);
 	let topUpRequested = $state(false);
 
+	onMount(async () => {
+		const authenticated = await initializeAuth();
+		if (!authenticated && !get(auth).error) {
+			await goto('/auth/login?redirectTo=%2Fbilling');
+		}
+	});
 </script>
 
 <svelte:head>
@@ -31,6 +40,25 @@
 	/>
 </svelte:head>
 
+{#if $auth.isLoading}
+	<main class="flex min-h-screen items-center justify-center bg-[#f8f8fc] px-4 text-slate-500">
+		<p>Memuat data akun...</p>
+	</main>
+{:else if $auth.error}
+	<main class="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#f8f8fc] px-4 text-center">
+		<p class="text-sm text-red-700" role="alert">{$auth.error}</p>
+		<button
+			type="button"
+			onclick={() => {
+				auth.update((state) => ({ ...state, error: null, isLoading: true }));
+				void initializeAuth();
+			}}
+			class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
+		>
+			Coba lagi
+		</button>
+	</main>
+{:else if $auth.user}
 <main class="min-h-screen bg-[#f8f8fc] px-4 py-8 text-slate-900 sm:px-6 sm:py-12">
 	<div class="mx-auto max-w-7xl">
 		<a
@@ -59,8 +87,19 @@
 			class="mx-auto mt-6 flex max-w-2xl items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left text-xs leading-5 text-amber-900"
 			role="note"
 		>
-			<span class="shrink-0 rounded-md bg-amber-100 px-2 py-0.5 font-bold">DATA DEMO</span>
-			<span>Pilihan paket dan top-up belum memproses pembayaran.</span>
+			<span class="shrink-0 rounded-md bg-amber-100 px-2 py-0.5 font-bold">INFO</span>
+			<span>Pembayaran paket dan top-up belum terhubung ke backend.</span>
+		</div>
+		<div class="mx-auto mt-3 flex max-w-2xl flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-slate-500">
+			<span>{$auth.user.fullName} · {$auth.user.email}</span>
+			<span>Saldo Kredit Kilat:
+				{#if typeof $auth.user.paygBalance === 'number'}
+					{formatRupiah($auth.user.paygBalance)}
+				{:else}
+					—
+				{/if}
+				({$auth.user.paygCredits ?? '—'} token)
+			</span>
 		</div>
 
 		<section id="paket" class="mt-10 scroll-mt-8" aria-labelledby="plans-title">
@@ -76,7 +115,8 @@
 
 			<div class="grid items-stretch gap-5 md:grid-cols-2 xl:grid-cols-4">
 				{#each subscriptionPlans as plan}
-					{@const isActive = plan.id === demoSubscription.planId}
+					{@const userTier = ($auth.user.subscriptionTier ?? '').toLowerCase()}
+					{@const isActive = [plan.id, plan.tier, plan.name].some((tier) => userTier === tier.toLowerCase())}
 					{@const isSelected = selectedPlanId === plan.id}
 					<article
 						class="relative flex flex-col rounded-2xl border bg-white p-5 shadow-sm transition sm:p-6 {plan.recommended
@@ -176,7 +216,7 @@
 			</div>
 			{#if selectedPlanId}
 				<p class="mt-4 text-center text-xs text-indigo-700" role="status">
-					Paket dipilih. Aktivasi dan pembayaran belum tersedia pada versi demo.
+					Paket dipilih. Aktivasi akan tersedia setelah integrasi pembayaran.
 				</p>
 			{/if}
 		</section>
@@ -269,11 +309,11 @@
 						</button>
 						{#if topUpRequested}
 							<span class="text-xs text-amber-700" role="status">
-								Pembayaran belum aktif. Saldo demo tidak berubah.
+								Pembayaran belum aktif. Saldo akun belum berubah.
 							</span>
 						{:else if selectedTopUpId}
 							<span class="text-xs text-slate-500" role="status">
-								Paket dipilih, pembayaran demo belum aktif.
+								Paket dipilih. Pembayaran belum tersedia.
 							</span>
 						{:else}
 							<span class="text-[10px] leading-4 text-slate-400">
@@ -293,3 +333,8 @@
 		</footer>
 	</div>
 </main>
+{:else}
+	<main class="flex min-h-screen items-center justify-center bg-[#f8f8fc] px-4 text-slate-500">
+		<p>Mengalihkan ke halaman login...</p>
+	</main>
+{/if}
