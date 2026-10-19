@@ -225,8 +225,11 @@
 		<section class="pricing-section section-shell" id="harga">
 			<div class="section-heading reveal" use:reveal>
 				<span class="eyebrow">Paket Pejuang Loker</span>
-				<h2>Pilih bekal untuk<br /><span>perjalanan kariermu.</span></h2>
-				<p>Mulai dari langkah kecil atau kejar peluang tanpa batas. Kamu yang tentukan ritmenya.</p>
+				<h2>Pilih Senjata Andalanmu untuk Menembus Gerbang Karier Impian</h2>
+				<p>
+					Mulai langkahmu secara gratis atau hajar ratusan lowongan sekaligus dengan fitur otomatisasi
+					penuh.
+				</p>
 			</div>
 
 			<div class="pricing-grid">
@@ -237,13 +240,13 @@
 						style:--reveal-delay="{index * 100}ms"
 					>
 						{#if plan.recommended}
-							<span class="pricing-badge"><Sparkles size={12} /> Paling Direkomendasikan</span>
+							<span class="pricing-badge"><Sparkles size={12} /> BEST SELLER</span>
 						{/if}
 						<span class="pricing-tier">{plan.tier}</span>
 						<h3>{plan.name}</h3>
 						<p class="pricing-description">{plan.description}</p>
 						<div class="pricing-amount">
-							<strong>{formatRupiah(plan.price)}</strong><span>/ bulan</span>
+							<strong>{formatRupiah(plan.price)}</strong><span>/{plan.pricePeriod}</span>
 						</div>
 						<div class="pricing-quota"><Mail size={15} /> {plan.quota}</div>
 						<ul>
@@ -252,7 +255,7 @@
 							{/each}
 						</ul>
 						<a class="pricing-cta {plan.recommended ? 'pricing-cta-featured' : ''}" href="/billing#paket">
-							Lihat paket <ArrowRight size={15} />
+							{plan.id === 'free' ? 'Mulai Berjuang' : 'Pilih Paket Ini'} <ArrowRight size={15} />
 						</a>
 					</article>
 				{/each}
@@ -261,13 +264,15 @@
 			<div class="payg-banner reveal" use:reveal>
 				<div class="payg-icon"><Zap size={19} /></div>
 				<div class="payg-copy">
-					<strong>Kredit Kilat</strong>
+					<strong>Kehabisan Kuota Bulanan di Tengah Jalan? Tenang, Pakai Kredit Kilat!</strong>
 					<span>
-						Tambah kredit kapan saja — {formatRupiah(500)} per aksi lamaran otomatis via email.
-						Mulai dari {formatRupiah(creditTopUpPackages[0].amount)} untuk {creditTopUpPackages[0].credits} kredit.
+						Cukup {formatRupiah(500)} per aksi kirim lamaran otomatis tanpa harus berlangganan
+						bulanan. Pilih {creditTopUpPackages[0].label}: {formatRupiah(creditTopUpPackages[0].amount)}
+						({creditTopUpPackages[0].credits} Token) atau {creditTopUpPackages[1].label}:
+						{formatRupiah(creditTopUpPackages[1].amount)} ({creditTopUpPackages[1].credits} Token).
 					</span>
 				</div>
-				<a href="/billing#kredit-kilat">Lihat pilihan <ArrowRight size={15} /></a>
+				<a href="/billing#kredit-kilat">Top-up Kredit Kilat <ArrowRight size={15} /></a>
 			</div>
 		</section>
 
@@ -991,6 +996,11 @@
 		line-height: 1.17;
 	}
 
+	.pricing-section .section-heading h2 {
+		max-width: 850px;
+		margin-inline: auto;
+	}
+
 	.section-heading h2 span {
 		color: #77768d;
 	}
@@ -1102,16 +1112,16 @@
 
 	.pricing-grid {
 		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
+		grid-template-columns: repeat(4, minmax(0, 1fr));
 		align-items: stretch;
 		gap: 16px;
-		padding-top: 10px;
+		padding: 12px 0 0;
 	}
 
 	.pricing-card {
 		position: relative;
 		display: flex;
-		min-height: 367px;
+		min-height: 410px;
 		flex-direction: column;
 		padding: 25px 23px 21px;
 		border: 1px solid #eeedf2;
@@ -1227,7 +1237,7 @@
 		align-items: flex-start;
 		gap: 7px;
 		color: #707084;
-		font-size: 9px;
+		font-size: 10px;
 		line-height: 1.5;
 	}
 
@@ -1247,7 +1257,7 @@
 		border: 1px solid #e6e4ed;
 		border-radius: 10px;
 		color: #55546b;
-		font-size: 10px;
+		font-size: 11px;
 		font-weight: 700;
 		text-decoration: none;
 		transition:
@@ -1600,7 +1610,8 @@
 		}
 
 		.pricing-grid {
-			gap: 11px;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 16px;
 		}
 
 		.pricing-card {

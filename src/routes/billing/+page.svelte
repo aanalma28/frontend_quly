@@ -10,7 +10,12 @@
 		Wallet,
 		Zap
 	} from '@lucide/svelte';
-	import { creditTopUpPackages, demoSubscription, formatRupiah, subscriptionPlans } from '#lib/data/billing.js';
+	import {
+		creditTopUpPackages,
+		demoSubscription,
+		formatRupiah,
+		subscriptionPlans
+	} from '#lib/data/billing.js';
 
 	let selectedPlanId = $state<string | null>(null);
 	let selectedTopUpId = $state<string | null>(null);
@@ -27,7 +32,7 @@
 </svelte:head>
 
 <main class="min-h-screen bg-[#f8f8fc] px-4 py-8 text-slate-900 sm:px-6 sm:py-12">
-	<div class="mx-auto max-w-6xl">
+	<div class="mx-auto max-w-7xl">
 		<a
 			href="/"
 			class="inline-flex items-center gap-2 text-sm font-medium text-slate-500 transition hover:text-indigo-700"
@@ -35,17 +40,18 @@
 			<ArrowLeft size={16} /> Kembali ke beranda
 		</a>
 
-		<header class="mx-auto mt-9 max-w-2xl text-center">
+		<header class="mx-auto mt-9 max-w-4xl text-center">
 			<span
 				class="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700"
 			>
 				<Sparkles size={14} /> Paket Pejuang Loker
 			</span>
 			<h1 class="mt-4 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
-				Pilih bekal untuk<br class="sm:hidden" /> perjalanan kariermu
+				Pilih Senjata Andalanmu untuk Menembus Gerbang Karier Impian
 			</h1>
 			<p class="mt-3 text-sm leading-6 text-slate-500 sm:text-base">
-				Pilih paket bulanan yang sesuai dengan targetmu, atau tambah kredit kapan pun diperlukan.
+				Mulai langkahmu secara gratis atau hajar ratusan lowongan sekaligus dengan fitur otomatisasi
+				penuh.
 			</p>
 		</header>
 
@@ -60,15 +66,15 @@
 		<section id="paket" class="mt-10 scroll-mt-8" aria-labelledby="plans-title">
 			<div class="mb-5 flex items-end justify-between gap-4">
 				<div>
-					<p class="text-xs font-bold uppercase tracking-[0.14em] text-indigo-600">Paket bulanan</p>
+					<p class="text-xs font-bold uppercase tracking-[0.14em] text-indigo-600">Pilihan paket</p>
 					<h2 id="plans-title" class="mt-1 text-xl font-bold tracking-tight text-slate-950">
-						Pilih langkahmu
+						Pilih paket perjuanganmu
 					</h2>
 				</div>
 				<span class="hidden text-xs text-slate-500 sm:block">Tanpa biaya tersembunyi</span>
 			</div>
 
-			<div class="grid items-stretch gap-4 lg:grid-cols-3">
+			<div class="grid items-stretch gap-5 md:grid-cols-2 xl:grid-cols-4">
 				{#each subscriptionPlans as plan}
 					{@const isActive = plan.id === demoSubscription.planId}
 					{@const isSelected = selectedPlanId === plan.id}
@@ -81,7 +87,7 @@
 							<div
 								class="absolute -top-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full bg-indigo-600 px-3 py-1 text-[10px] font-bold text-white shadow-sm"
 							>
-								<Crown size={12} /> Paling Direkomendasikan
+								<Crown size={12} /> BEST SELLER
 							</div>
 						{/if}
 
@@ -110,7 +116,7 @@
 							<strong class="text-3xl font-bold tracking-tight text-slate-950">
 								{formatRupiah(plan.price)}
 							</strong>
-							<span class="text-xs text-slate-500">/ bulan</span>
+							<span class="text-xs text-slate-500">/{plan.pricePeriod}</span>
 						</div>
 
 						<div class="mt-4 flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5">
@@ -156,7 +162,11 @@
 										? 'border-indigo-600 bg-indigo-600 text-white shadow-sm shadow-indigo-200 hover:bg-indigo-700'
 										: 'border-slate-200 bg-white text-slate-700 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700'}"
 								>
-									{isSelected ? 'Dipilih untuk upgrade' : 'Pilih paket'}
+									{isSelected
+										? 'Dipilih untuk upgrade'
+										: plan.id === 'free'
+											? 'Mulai Berjuang'
+											: 'Pilih Paket Ini'}
 									<ArrowRight size={15} />
 								</button>
 							{/if}
@@ -188,18 +198,19 @@
 							<Zap size={13} /> Pay-As-You-Go
 						</span>
 						<h2 id="credits-title" class="mt-4 text-2xl font-bold tracking-tight">
-							Kredit Kilat
+							Kehabisan Kuota Bulanan di Tengah Jalan? Tenang, Pakai Kredit Kilat!
 						</h2>
 						<p class="mt-2 max-w-sm text-xs leading-5 text-slate-300">
-							Kuota bulanan habis? Tetap lanjutkan aksi lamaran otomatis via email dengan kredit.
+							Cukup {formatRupiah(500)} per aksi kirim lamaran otomatis tanpa harus berlangganan
+							bulanan.
 						</p>
 						<div class="mt-6 flex items-end gap-2">
 							<strong class="text-3xl font-bold">{formatRupiah(500)}</strong>
-							<span class="pb-1 text-xs text-slate-300">/ 1 aksi lamaran email</span>
+							<span class="pb-1 text-xs text-slate-300">/ 1 aksi kirim lamaran</span>
 						</div>
 						<div class="mt-5 flex items-center gap-2 text-[11px] text-slate-300">
 							<Check size={14} class="text-emerald-300" />
-							Kredit berlaku saat kuota bulanan habis
+							Tetap bisa berjuang tanpa paket bulanan
 						</div>
 					</div>
 				</div>
@@ -209,14 +220,14 @@
 						<div>
 							<p class="text-xs font-bold uppercase tracking-[0.13em] text-violet-600">Isi saldo</p>
 							<h3 class="mt-1 text-lg font-bold text-slate-950">Pilih paket kredit</h3>
-							<p class="mt-1 text-xs text-slate-500">1 kredit = 1 aksi lamaran otomatis via email</p>
+							<p class="mt-1 text-xs text-slate-500">1 token = 1 aksi kirim lamaran otomatis</p>
 						</div>
 						<span class="hidden size-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600 sm:flex">
 							<Wallet size={19} />
 						</span>
 					</div>
 
-					<div class="mt-5 grid gap-2 sm:grid-cols-3">
+					<div class="mt-5 grid gap-3 sm:grid-cols-2">
 						{#each creditTopUpPackages as pack}
 							{@const isSelected = selectedTopUpId === pack.id}
 							<button
@@ -241,7 +252,7 @@
 								<strong class="mt-1 block text-sm font-bold text-slate-900">
 									{formatRupiah(pack.amount)}
 								</strong>
-								<span class="mt-1 block text-[10px] text-slate-500">{pack.credits} kredit</span>
+								<span class="mt-1 block text-[10px] text-slate-500">{pack.credits} Token</span>
 							</button>
 						{/each}
 					</div>
