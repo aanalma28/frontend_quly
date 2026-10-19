@@ -126,10 +126,17 @@ function extractTokenResponse(value: unknown): {
 	};
 }
 
-function persistTokens(accessToken: string, refreshToken: string | null) {
+export function saveAuthTokens(accessToken: string, refreshToken: string | null) {
 	localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
 	if (refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
 	else localStorage.removeItem(REFRESH_TOKEN_KEY);
+	auth.update((state) => ({
+		...state,
+		isAuthenticated: true,
+		token: accessToken,
+		isLoading: true,
+		error: null
+	}));
 }
 
 function clearSession() {
@@ -179,7 +186,7 @@ export async function login(
 			body: JSON.stringify({ email, password })
 		});
 		const result = extractTokenResponse(await response.json());
-		persistTokens(result.accessToken, result.refreshToken);
+		saveAuthTokens(result.accessToken, result.refreshToken);
 		auth.set({
 			user: null,
 			isAuthenticated: true,
@@ -219,14 +226,7 @@ export function loginWithGoogle(): void {
 }
 
 export async function completeOAuthLogin(accessToken: string, refreshToken: string | null = null) {
-	persistTokens(accessToken, refreshToken);
-	auth.set({
-		user: null,
-		isAuthenticated: true,
-		token: accessToken,
-		isLoading: true,
-		error: null
-	});
+	saveAuthTokens(accessToken, refreshToken);
 	await fetchUserProfile();
 	await goto('/dashboard', { invalidateAll: true });
 }
@@ -260,3 +260,12 @@ export async function logout(): Promise<void> {
 	clearSession();
 	await goto('/auth/login', { invalidateAll: true });
 }
+
+export const authStore = {
+	subscribe: auth.subscribe,
+	login,
+	register,
+	loginWithGoogle,
+	fetchUserProfile,
+	logout
+};

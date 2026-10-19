@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { login, loginWithGoogle } from '#lib/stores/auth.js';
+	import { login } from '#lib/stores/auth.js';
+	import { getApiUrl } from '#lib/utils/api.js';
 	import AuthShell from '$lib/components/auth/AuthShell.svelte';
 	import GoogleButton from '$lib/components/auth/GoogleButton.svelte';
 	import FormField from '$lib/components/ui/FormField.svelte';
@@ -9,10 +10,18 @@
 	let email = $state('');
 	let password = $state('');
 	let submitting = $state(false);
-	let formError = $state<string | null>(null);
+	let formError = $state<string | null>(
+		page.url.searchParams.get('error') === 'OAuthFailed'
+			? 'Masuk dengan Google belum berhasil. Silakan coba lagi.'
+			: null
+	);
 	let fieldErrors = $state<{ email?: string; password?: string }>({});
 
 	const redirectTo = $derived(page.url.searchParams.get('redirectTo') || '/dashboard');
+
+	function handleGoogleLogin() {
+		window.location.href = getApiUrl('/auth/google');
+	}
 
 	function validate(): boolean {
 		const errors: { email?: string; password?: string } = {};
@@ -110,7 +119,11 @@
 		<span class="h-px flex-1 bg-zinc-200"></span>
 	</div>
 
-	<GoogleButton disabled={submitting} onclick={loginWithGoogle} />
+	<GoogleButton
+		disabled={submitting}
+		label="Masuk dengan Google"
+		onclick={handleGoogleLogin}
+	/>
 
 	{#snippet footer()}
 		<p>

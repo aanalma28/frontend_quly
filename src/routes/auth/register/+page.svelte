@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { loginWithGoogle, register } from '#lib/stores/auth.js';
+	import { register } from '#lib/stores/auth.js';
+	import { getApiUrl } from '#lib/utils/api.js';
 	import AuthShell from '$lib/components/auth/AuthShell.svelte';
 	import GoogleButton from '$lib/components/auth/GoogleButton.svelte';
 	import FormField from '$lib/components/ui/FormField.svelte';
@@ -19,6 +20,10 @@
 		confirmPassword?: string;
 		terms?: string;
 	}>({});
+
+	function handleGoogleLogin() {
+		window.location.href = getApiUrl('/auth/google');
+	}
 
 	function validate(): boolean {
 		const errors: typeof fieldErrors = {};
@@ -157,7 +162,7 @@
 		<span class="h-px flex-1 bg-zinc-200"></span>
 	</div>
 
-	<GoogleButton disabled={submitting} label="Sign up with Google" onclick={loginWithGoogle} />
+	<GoogleButton disabled={submitting} label="Daftar dengan Google" onclick={handleGoogleLogin} />
 
 	{#snippet footer()}
 		<p>
