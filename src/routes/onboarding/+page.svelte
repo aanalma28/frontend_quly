@@ -1,6 +1,11 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import { ApiError, apiRequest } from '$lib/utils/api';
+	import {
+		clearPendingRegistrationDetails,
+		getPendingRegistrationDetails
+	} from '$lib/utils/pending-registration';
 	import FormField from '$lib/components/ui/FormField.svelte';
 	import Spinner from '$lib/components/ui/Spinner.svelte';
 	import CvDropzone from '$lib/components/onboarding/CvDropzone.svelte';
@@ -32,6 +37,19 @@
 	let formError = $state<string | null>(null);
 	let stepError = $state<string | null>(null);
 	let fieldErrors = $state<Record<string, string>>({});
+
+	onMount(() => {
+		try {
+			const details = getPendingRegistrationDetails();
+			if (details) {
+				fullName = details.fullName;
+				phone = details.phone;
+			}
+		} catch (error) {
+			formError =
+				error instanceof Error ? error.message : 'Could not load saved registration details.';
+		}
+	});
 
 	function validateStep(index: number): boolean {
 		const errors: Record<string, string> = {};
@@ -107,6 +125,7 @@
 			body.append('cv', file, file.name);
 
 			await apiRequest('onboarding', { method: 'POST', body });
+			clearPendingRegistrationDetails();
 			await goto('/dashboard', { invalidateAll: true });
 		} catch (error) {
 			formError =

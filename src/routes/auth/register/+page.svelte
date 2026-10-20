@@ -5,6 +5,7 @@
 	import { register, requestEmailVerificationCode, verifyEmailVerificationCode } from '#lib/stores/auth.js';
 	import { getApiUrl } from '#lib/utils/api.js';
 	import { normalizeEmail, otpCooldownSeconds } from '#lib/utils/email-auth.js';
+	import { savePendingRegistrationDetails } from '#lib/utils/pending-registration.js';
 	import AuthShell from '$lib/components/auth/AuthShell.svelte';
 	import GoogleButton from '$lib/components/auth/GoogleButton.svelte';
 	import FormField from '$lib/components/ui/FormField.svelte';
@@ -99,6 +100,7 @@
 
 		submitting = true;
 		try {
+			if (!verificationOnly) savePendingRegistrationDetails({ fullName, phone });
 			await requestEmailVerificationCode(normalizedEmail);
 			otp = '';
 			step = 'otp';
@@ -242,7 +244,7 @@
 			{#if !verificationOnly}
 				<FormField
 					id="phone"
-					label="Nomor telepon"
+					label="Nomor WhatsApp"
 					type="tel"
 					bind:value={phone}
 					autocomplete="tel"
