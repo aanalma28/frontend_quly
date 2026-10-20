@@ -4,9 +4,16 @@
 		disabled?: boolean;
 		maxMb?: number;
 		error?: string;
+		onfilechange?: (file: File) => void;
 	}
 
-	let { file = $bindable(null), disabled = false, maxMb = 5, error }: Props = $props();
+	let {
+		file = $bindable(null),
+		disabled = false,
+		maxMb = 5,
+		error,
+		onfilechange
+	}: Props = $props();
 
 	let dragDepth = $state(0);
 	let inputEl = $state<HTMLInputElement | undefined>(undefined);
@@ -38,6 +45,7 @@
 
 		localError = null;
 		file = candidate;
+		onfilechange?.(candidate);
 	}
 
 	function handleInput(event: Event) {
@@ -129,6 +137,8 @@
 			ondragover={handleDragOver}
 			ondragleave={handleDragLeave}
 			ondrop={handleDrop}
+			role="group"
+			aria-label="Unggah CV PDF"
 		>
 			<div
 				class="flex h-11 w-11 items-center justify-center rounded-full bg-zinc-100 text-zinc-500"

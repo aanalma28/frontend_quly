@@ -8,6 +8,7 @@
 		LogOut,
 		MailCheck,
 		Plus,
+		UserRound,
 		WalletCards
 	} from '@lucide/svelte';
 	import { page } from '$app/state';
@@ -23,7 +24,8 @@
 		{ label: 'Ringkasan', href: '/dashboard', icon: LayoutDashboard },
 		{ label: 'Lamaran otomatis', href: '/dashboard/auto-apply', icon: MailCheck },
 		{ label: 'Pusat lowongan', href: '/dashboard/manual-hub', icon: BriefcaseBusiness },
-		{ label: 'Hasil psikotes', href: '/dashboard/psychotest', icon: BrainCircuit }
+		{ label: 'Hasil psikotes', href: '/dashboard/psychotest', icon: BrainCircuit },
+		{ label: 'Profil & Ekstraksi CV', href: '/dashboard/onboarding', icon: UserRound }
 	];
 
 	function isActive(href: string) {
@@ -37,6 +39,14 @@
 		const authenticated = await initializeAuth();
 		if (!authenticated && !get(auth).error) {
 			await goto('/auth/login?redirectTo=%2Fdashboard');
+			return;
+		}
+		if (
+			authenticated &&
+			get(auth).user?.isOnboardingCompleted === false &&
+			page.url.pathname !== '/dashboard/onboarding'
+		) {
+			await goto('/onboarding', { replaceState: true });
 		}
 	}
 
@@ -44,6 +54,14 @@
 		const authenticated = await initializeAuth();
 		if (!authenticated && !get(auth).error) {
 			await goto('/auth/login?redirectTo=%2Fdashboard');
+			return;
+		}
+		if (
+			authenticated &&
+			get(auth).user?.isOnboardingCompleted === false &&
+			page.url.pathname !== '/dashboard/onboarding'
+		) {
+			await goto('/onboarding', { replaceState: true });
 		}
 	});
 </script>

@@ -18,6 +18,9 @@ export interface AuthUser {
 	subscriptionTier?: string | null;
 	monthlyQuota?: number | null;
 	remainingApplications?: number | null;
+	atsConversionQuota?: number | null;
+	atsConversionRemaining?: number | null;
+	isOnboardingCompleted: boolean;
 	paygBalance?: number | null;
 	paygCredits?: number | null;
 	[key: string]: unknown;
@@ -77,9 +80,41 @@ function normalizeUser(value: unknown): AuthUser {
 	if (!email) throw new Error('Profil pengguna dari backend tidak memiliki email.');
 	const subscription = isRecord(profile.subscription) ? profile.subscription : {};
 	const wallet = isRecord(profile.wallet) ? profile.wallet : {};
+	const onboarding = isRecord(profile.onboarding) ? profile.onboarding : {};
+	const ats = isRecord(profile.ats) ? profile.ats : {};
 	const monthlyQuota =
 		readNumber(profile, 'monthlyQuota', 'monthly_quota') ??
 		readNumber(subscription, 'monthlyQuota', 'monthly_quota', 'quota');
+	const atsConversionQuota =
+		readNumber(
+			profile,
+			'atsConversionQuota',
+			'ats_conversion_quota',
+			'atsQuota',
+			'ats_quota',
+			'cvConversionQuota',
+			'cv_conversion_quota'
+		) ?? readNumber(ats, 'quota', 'total', 'limit');
+	const atsConversionRemaining =
+		readNumber(
+			profile,
+			'atsConversionRemaining',
+			'ats_conversion_remaining',
+			'atsRemainingQuota',
+			'ats_remaining_quota',
+			'cvConversionRemaining',
+			'cv_conversion_remaining'
+		) ??
+		readNumber(ats, 'remaining', 'remainingQuota', 'remaining_quota') ??
+		(typeof atsConversionQuota === 'number'
+			? Math.max(
+					0,
+					atsConversionQuota -
+						(readNumber(profile, 'atsConversionUsed', 'ats_conversion_used') ??
+							readNumber(ats, 'used', 'consumed') ??
+							0)
+				)
+			: undefined);
 	const remainingApplications =
 		readNumber(
 			profile,
@@ -108,6 +143,18 @@ function normalizeUser(value: unknown): AuthUser {
 			null,
 		monthlyQuota,
 		remainingApplications,
+		atsConversionQuota,
+		atsConversionRemaining,
+		isOnboardingCompleted:
+			typeof profile.isOnboardingCompleted === 'boolean'
+				? profile.isOnboardingCompleted
+				: typeof profile.is_onboarding_completed === 'boolean'
+					? profile.is_onboarding_completed
+					: typeof onboarding.isCompleted === 'boolean'
+						? onboarding.isCompleted
+						: typeof onboarding.is_completed === 'boolean'
+							? onboarding.is_completed
+							: false,
 		paygBalance:
 			readNumber(profile, 'paygBalance', 'payg_balance', 'creditBalance') ??
 			readNumber(wallet, 'paygBalance', 'balance', 'amount'),
@@ -260,6 +307,11 @@ export async function initializeAuth(): Promise<boolean> {
 export async function logout(): Promise<void> {
 	clearSession();
 	await goto('/auth/login', { invalidateAll: true });
+}
+
+export function logoutToOnboardingLogin(): void {
+	clearSession();
+	window.location.assign('/login?message=onboarding_skipped');
 }
 
 export const authStore = {

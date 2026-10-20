@@ -20,9 +20,10 @@ src/
 │   └── utils/            # API helpers
 └── routes/
     ├── auth/             # Login, register, and OAuth callback
-    ├── onboarding/       # CV upload and privacy consent
+    ├── onboarding/       # Onboarding entry and skip confirmation
     ├── psychotest/       # Pauli and Kraepelin test
     ├── dashboard/
+    │   ├── onboarding/   # Editable career profile and CV extraction
     │   ├── auto-apply/   # Automated email application history
     │   ├── manual-hub/   # Non-email jobs and direct apply links
     │   └── psychotest/   # Psychotest results
@@ -31,6 +32,8 @@ src/
 
 Email/password authentication, Google OAuth, callback handling, and profile loading are connected to the
 NestJS REST API. Other backend-dependent workflows may still require their own API integration.
+Dashboard routes require a completed onboarding profile; profile extraction and submission use the
+`onboarding/extract-cv` and `onboarding/submit` API endpoints.
 
 ## Requirements
 
