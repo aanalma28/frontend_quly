@@ -97,7 +97,7 @@
 
 		try {
 			const body = new FormData();
-			body.append('full_name', fullName.trim());
+			body.append('fullName', fullName.trim());
 			body.append('phone', phone.trim());
 			body.append('city', city.trim());
 			body.append('target_position', targetPosition.trim());

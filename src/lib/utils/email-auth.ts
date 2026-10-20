@@ -8,7 +8,7 @@ export interface VerifyEmailOtpRequest {
 }
 
 export interface RegisterEmailRequest {
-	full_name: string;
+	fullName: string;
 	email: string;
 	phone: string;
 	password: string;
@@ -143,7 +143,7 @@ export class EmailAuthFlow {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
-				full_name: details.fullName.trim(),
+				fullName: details.fullName.trim(),
 				email: normalizedEmail,
 				phone: details.phone.trim(),
 				password,

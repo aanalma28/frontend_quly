@@ -73,7 +73,7 @@ test('register requires OTP and calls send, verify, then register in order', asy
 	assert.deepEqual(requests[0].body, { email: 'user@example.com' });
 	assert.deepEqual(requests[1].body, { email: 'user@example.com', code: '123456' });
 	assert.deepEqual(requests[2].body, {
-		full_name: 'Budi Santoso',
+		fullName: 'Budi Santoso',
 		email: 'user@example.com',
 		phone: '+6281234567890',
 		password: 'password-123',
