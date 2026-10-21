@@ -33,7 +33,10 @@ src/
 Email/password authentication, Google OAuth, callback handling, and profile loading are connected to the
 NestJS REST API. Other backend-dependent workflows may still require their own API integration.
 Dashboard routes require a completed onboarding profile; profile extraction and submission use the
-`onboarding/extract-cv` and `onboarding/submit` API endpoints.
+`GET onboarding/me`, `POST onboarding/parse-cv`, `POST onboarding/submit`, and
+`PUT onboarding/update` API endpoints. CV parsing is requested from the backend; no AI provider key
+is sent to or used by the frontend. The onboarding profile endpoint also supplies the user's CV
+conversion quota.
 
 ## Requirements
 
