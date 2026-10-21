@@ -252,17 +252,10 @@ export async function register(
 ): Promise<void> {
 	auth.update((state) => ({ ...state, isLoading: true, error: null }));
 	try {
-		const result = await emailAuthFlow.register(email, password, details);
-		saveAuthTokens(result.accessToken, result.refreshToken);
-		auth.set({
-			user: null,
-			isAuthenticated: true,
-			token: result.accessToken,
-			isLoading: false,
-			error: null
-		});
-		await fetchUserProfile();
-		await goto('/onboarding', { invalidateAll: true });
+		await emailAuthFlow.register(email, password, details);
+		clearSession();
+		const params = new URLSearchParams({ registered: '1', email });
+		await goto(`/auth/login?${params.toString()}`, { invalidateAll: true });
 	} catch (error) {
 		auth.update((state) => ({ ...state, isLoading: false, error: errorMessage(error) }));
 		throw error;

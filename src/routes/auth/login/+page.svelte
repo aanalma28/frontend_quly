@@ -16,9 +16,11 @@
 	let statusMessage = $state<string | null>(
 		page.url.searchParams.get('message') === 'onboarding_skipped'
 			? 'Anda telah keluar. Login kembali dan selesaikan onboarding untuk membuka dashboard.'
-			: page.url.searchParams.get('verified') === '1'
-				? 'Email berhasil diverifikasi. Silakan masuk dengan kata sandi.'
-				: null
+			: page.url.searchParams.get('registered') === '1'
+				? 'Pendaftaran berhasil. Silakan masuk dengan email dan kata sandi.'
+				: page.url.searchParams.get('verified') === '1'
+					? 'Email berhasil diverifikasi. Silakan masuk dengan kata sandi.'
+					: null
 	);
 	let formError = $state<string | null>(
 		page.url.searchParams.get('error') === 'OAuthFailed'

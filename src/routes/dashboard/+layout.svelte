@@ -39,14 +39,6 @@
 		const authenticated = await initializeAuth();
 		if (!authenticated && !get(auth).error) {
 			await goto('/auth/login?redirectTo=%2Fdashboard');
-			return;
-		}
-		if (
-			authenticated &&
-			get(auth).user?.isOnboardingCompleted === false &&
-			page.url.pathname !== '/dashboard/onboarding'
-		) {
-			await goto('/onboarding', { replaceState: true });
 		}
 	}
 
@@ -54,14 +46,6 @@
 		const authenticated = await initializeAuth();
 		if (!authenticated && !get(auth).error) {
 			await goto('/auth/login?redirectTo=%2Fdashboard');
-			return;
-		}
-		if (
-			authenticated &&
-			get(auth).user?.isOnboardingCompleted === false &&
-			page.url.pathname !== '/dashboard/onboarding'
-		) {
-			await goto('/onboarding', { replaceState: true });
 		}
 	});
 </script>
@@ -186,7 +170,28 @@
 		</header>
 
 		<main class="mx-auto max-w-[1440px] px-5 py-7 sm:px-8 sm:py-9">
-			{@render children()}
+			{#if $auth.user.isOnboardingCompleted ||
+				page.url.pathname === '/dashboard' ||
+				page.url.pathname === '/dashboard/onboarding'}
+				{@render children()}
+			{:else}
+				<section class="mx-auto max-w-2xl rounded-2xl border border-amber-200 bg-white p-6 shadow-sm sm:p-8">
+					<p class="text-sm font-semibold text-amber-700">Lengkapi onboarding untuk melanjutkan</p>
+					<h1 class="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
+						Fitur ini tersedia setelah profilmu lengkap.
+					</h1>
+					<p class="mt-3 text-sm leading-6 text-slate-600">
+						Lengkapi profil dan ekstraksi CV terlebih dahulu agar fitur ini bisa disesuaikan dengan
+						informasi kariermu.
+					</p>
+					<a
+						href="/dashboard/onboarding"
+						class="mt-5 inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700"
+					>
+						Lengkapi profil
+					</a>
+				</section>
+			{/if}
 		</main>
 	</div>
 	{/if}
