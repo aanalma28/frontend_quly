@@ -40,8 +40,8 @@ conversion quota.
 
 ## Requirements
 
-- Node.js 18 or newer
-- npm
+- Node.js 24.22.1 (LTS). Versi ini tersimpan di `.nvmrc`, jalankan `nvm use` bila memakai nvm.
+- npm 11 (bawaan Node.js 24.22.1)
 
 ## Run locally
 
@@ -65,4 +65,5 @@ npm run build
 npm run preview
 ```
 
-The authentication flow tests use Node.js 22's built-in TypeScript stripping support.
+The authentication flow tests use Node.js 24's built-in TypeScript support, so no
+`--experimental-strip-types` flag is needed.
