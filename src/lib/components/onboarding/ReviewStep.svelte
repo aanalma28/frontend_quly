@@ -6,10 +6,12 @@
 		backToUpload,
 		submit,
 		updateAdditionalFormData,
-		updateRawCvData
+		updateRawCvData,
+		setAtsStyle
 	} from '#lib/stores/onboardingStore.js';
 	import type {
 		AdditionalFormData,
+		AtsStyle,
 		Certification,
 		Education,
 		ParsedCvData,
@@ -21,6 +23,24 @@
 	const additional = $derived<AdditionalFormData>($onboarding.additionalFormData);
 	const atsQuota = $derived($onboarding.atsQuota);
 	const atsQuotaExhausted = $derived(atsQuota !== null && atsQuota.remaining === 0);
+
+	const atsStyleOptions: { value: AtsStyle; label: string; description: string }[] = [
+		{
+			value: 'PROFESSIONAL_CORPORATE',
+			label: 'Professional Corporate',
+			description: 'Tone formal, berfokus pada kepemimpinan, kepatuhan proses, dan stabilitas organisasi.'
+		},
+		{
+			value: 'TECH_STARTUP',
+			label: 'Tech Startup',
+			description: 'Tone dinamis, berfokus pada eksekusi cepat, metrik kuantitatif, dan tech stack modern.'
+		},
+		{
+			value: 'MINIMALIST_EXEC',
+			label: 'Minimalist Executive',
+			description: 'Tone ringkas, padat, berfokus pada dampak keputusan berlevel tinggi.'
+		}
+	];
 
 	const experiences = $derived<WorkExperience[]>(profile.experiences ?? []);
 	const educations = $derived<Education[]>(profile.educations ?? []);
@@ -413,6 +433,29 @@
 			{/each}
 		</div>
 		<input bind:value={languageInput} aria-label="Tambah bahasa" placeholder="Contoh: Bahasa Indonesia" maxlength="120" onkeydown={addLanguage} class="{inputClass} sm:max-w-md" />
+	</section>
+
+	<section class="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+		<div>
+			<h2 class="text-lg font-semibold text-slate-950">Gaya CV ATS</h2>
+			<p class="mt-1 text-sm text-slate-500">Pilih gaya penulisan yang digunakan AI untuk menyusun CV ATS-mu.</p>
+		</div>
+		<div class="grid gap-3 sm:grid-cols-3">
+			{#each atsStyleOptions as option (option.value)}
+				{@const selected = $onboarding.atsStyle === option.value}
+				<button
+					type="button"
+					aria-pressed={selected}
+					onclick={() => setAtsStyle(option.value)}
+					class="flex flex-col items-start gap-2 rounded-xl border p-4 text-left transition {selected
+						? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-100'
+						: 'border-slate-200 bg-white hover:border-indigo-200 hover:bg-indigo-50/40'}"
+				>
+					<span class="text-sm font-semibold text-slate-900">{option.label}</span>
+					<span class="text-xs leading-5 text-slate-500">{option.description}</span>
+				</button>
+			{/each}
+		</div>
 	</section>
 
 	<section class="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">

@@ -77,9 +77,13 @@ export interface AdditionalFormData {
 	targetRole: string;
 }
 
+/** ATS CV generation style, mirroring the backend `AtsStyleEnum`. */
+export type AtsStyle = 'PROFESSIONAL_CORPORATE' | 'TECH_STARTUP' | 'MINIMALIST_EXEC';
+
 export interface SubmitOnboardingPayload {
 	parsedCvData: ParsedCvData;
 	additionalForm: AdditionalFormData;
+	atsStyle: AtsStyle;
 }
 
 export interface QuotaSummary {

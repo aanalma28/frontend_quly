@@ -6,6 +6,7 @@ import {
 	parseCvApi,
 	submitOnboardingApi,
 	type AdditionalFormData,
+	type AtsStyle,
 	type Certification,
 	type Education,
 	type ParsedCvData,
@@ -21,6 +22,7 @@ export interface OnboardingState {
 	currentStep: OnboardingStep;
 	rawCvData: ParsedCvData | null;
 	additionalFormData: AdditionalFormData;
+	atsStyle: AtsStyle;
 	atsResult: SubmitOnboardingResult | null;
 	isParsing: boolean;
 	isSubmitting: boolean;
@@ -42,6 +44,7 @@ const initialState: OnboardingState = {
 	currentStep: 1,
 	rawCvData: null,
 	additionalFormData: emptyAdditionalForm(),
+	atsStyle: 'PROFESSIONAL_CORPORATE',
 	atsResult: null,
 	isParsing: false,
 	isSubmitting: false,
@@ -249,6 +252,11 @@ export function updateAdditionalFormData(partial: Partial<AdditionalFormData>) {
 		...state,
 		additionalFormData: { ...state.additionalFormData, ...partial }
 	}));
+}
+
+/** Set the selected ATS CV generation style. */
+export function setAtsStyle(style: AtsStyle) {
+	patch({ atsStyle: style });
 }
 
 /** Clear the current error message. */
@@ -492,7 +500,8 @@ export async function submit(): Promise<void> {
 				jobCategory: state.additionalFormData.jobCategory.trim(),
 				careerSummary: state.additionalFormData.careerSummary.trim(),
 				targetRole: state.additionalFormData.targetRole.trim()
-			}
+			},
+			atsStyle: state.atsStyle
 		});
 		patch({ atsResult: result, currentStep: 3, hasSavedProfile: true });
 		markOnboardingCompleted();
@@ -517,5 +526,6 @@ export const onboardingStore = {
 	backToUpload,
 	updateRawCvData,
 	updateAdditionalFormData,
+	setAtsStyle,
 	clearError
 };
