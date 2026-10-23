@@ -19,6 +19,8 @@
 
 	const profile = $derived<ParsedCvData>($onboarding.rawCvData ?? {});
 	const additional = $derived<AdditionalFormData>($onboarding.additionalFormData);
+	const atsQuota = $derived($onboarding.atsQuota);
+	const atsQuotaExhausted = $derived(atsQuota !== null && atsQuota.remaining === 0);
 
 	const experiences = $derived<WorkExperience[]>(profile.experiences ?? []);
 	const educations = $derived<Education[]>(profile.educations ?? []);
@@ -134,7 +136,7 @@
 	function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
 		validationAttempted = true;
-		if (fullNameError || phoneError) return;
+		if (fullNameError || phoneError || atsQuotaExhausted) return;
 		void submit();
 	}
 
@@ -450,7 +452,15 @@
 		</details>
 	{/if}
 
-	<div class="flex items-center justify-between gap-3 pb-3">
+	{#if atsQuotaExhausted}
+		<div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+			Kuota Generate ATS Anda habis. Silakan
+			<a href="/billing#paket" class="font-semibold underline">upgrade</a>
+			untuk melanjutkan.
+		</div>
+	{/if}
+
+	<div class="flex flex-wrap items-center justify-between gap-3 pb-3">
 		<button
 			type="button"
 			onclick={backToUpload}
@@ -459,13 +469,23 @@
 			<ArrowLeft size={16} />
 			Kembali
 		</button>
-		<button
-			type="submit"
-			disabled={$onboarding.isSubmitting || $onboarding.isParsing}
-			class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
-		>
-			{#if $onboarding.isSubmitting}<Spinner label="Menyimpan profil" />{/if}
-			Simpan &amp; Lanjut <ArrowRight size={16} />
-		</button>
+		<div class="flex items-center gap-3">
+			{#if atsQuota}
+				<p class="text-xs text-slate-500">
+					Kuota Generate ATS:
+					<span class="font-semibold text-slate-700">
+						{atsQuota.remaining === -1 ? 'Tanpa batas' : `${atsQuota.remaining}/${atsQuota.limit}`}
+					</span>
+				</p>
+			{/if}
+			<button
+				type="submit"
+				disabled={$onboarding.isSubmitting || $onboarding.isParsing || atsQuotaExhausted}
+				class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+			>
+				{#if $onboarding.isSubmitting}<Spinner label="Menyimpan profil" />{/if}
+				Simpan &amp; Lanjut <ArrowRight size={16} />
+			</button>
+		</div>
 	</div>
 </form>

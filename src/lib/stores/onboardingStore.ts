@@ -1,4 +1,3 @@
-import { goto } from '$app/navigation';
 import { get, writable, type Writable } from 'svelte/store';
 import { ApiError } from '#lib/utils/api.js';
 import { auth } from '#lib/stores/auth.js';
@@ -6,7 +5,6 @@ import {
 	getOnboardingProfileApi,
 	parseCvApi,
 	submitOnboardingApi,
-	updateOnboardingProfileApi,
 	type AdditionalFormData,
 	type Certification,
 	type Education,
@@ -477,12 +475,8 @@ function buildProfilePayload(rawCvData: ParsedCvData): ParsedCvData {
 }
 
 /**
- * Submit the reviewed data.
- *
- * - First-time onboarding: calls `POST /onboarding/submit` (generates the ATS
- *   CV) and advances to the ATS preview step.
- * - Returning users: calls `PUT /onboarding/update` and redirects back to the
- *   dashboard without consuming an ATS generation credit.
+ * Submit the reviewed data via `POST /onboarding/submit` (generates the ATS CV,
+ * consuming one ATS generation credit) and advance to the ATS preview step.
  */
 export async function submit(): Promise<void> {
 	const state = get(onboarding);
@@ -491,21 +485,6 @@ export async function submit(): Promise<void> {
 	patch({ isSubmitting: true, errorMessage: null });
 	try {
 		const profile = buildProfilePayload(state.rawCvData);
-
-		if (state.hasSavedProfile) {
-			const careerSummary = state.additionalFormData.careerSummary.trim();
-			const updatePayload: ParsedCvData = {
-				...profile,
-				...(careerSummary ? { professionalSummary: careerSummary } : {}),
-				...(profile.address ? {} : state.additionalFormData.targetDomicile.trim() ? { address: state.additionalFormData.targetDomicile.trim() } : {})
-			};
-			await updateOnboardingProfileApi(updatePayload);
-			patch({ hasSavedProfile: true });
-			markOnboardingCompleted();
-			await goto('/dashboard', { invalidateAll: true });
-			return;
-		}
-
 		const result = await submitOnboardingApi({
 			parsedCvData: profile,
 			additionalForm: {
