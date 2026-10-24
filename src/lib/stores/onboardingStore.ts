@@ -503,6 +503,7 @@ export async function submit(): Promise<void> {
 			},
 			atsStyle: state.atsStyle
 		});
+		console.log(result)
 		patch({ atsResult: result, currentStep: 3, hasSavedProfile: true });
 		markOnboardingCompleted();
 	} catch (error) {
