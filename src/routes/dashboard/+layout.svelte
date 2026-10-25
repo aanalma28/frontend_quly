@@ -15,6 +15,10 @@
 	import { onMount } from 'svelte';
 	import { get } from 'svelte/store';
 	import { auth, initializeAuth, logout } from '#lib/stores/auth.js';
+	import { psychotest, setPsychotestCompleted } from '#lib/stores/psychotestStore.js';
+	import { getAttemptsApi } from '#lib/services/psychotestApi.js';
+	import { loadProfile, onboarding, step1Complete } from '#lib/stores/onboardingStore.js';
+	import RequirementsStepsCard from '#lib/components/ui/RequirementsStepsCard.svelte';
 	import { goto } from '$app/navigation';
 	import type { LayoutProps } from './$types';
 
@@ -24,7 +28,7 @@
 		{ label: 'Ringkasan', href: '/dashboard', icon: LayoutDashboard },
 		{ label: 'Lamaran otomatis', href: '/dashboard/auto-apply', icon: MailCheck },
 		{ label: 'Pusat lowongan', href: '/dashboard/manual-hub', icon: BriefcaseBusiness },
-		{ label: 'Hasil psikotes', href: '/dashboard/psychotest', icon: BrainCircuit },
+		{ label: 'Psikotes', href: '/dashboard/psychotest', icon: BrainCircuit },
 		{ label: 'Profil & Ekstraksi CV', href: '/dashboard/onboarding', icon: UserRound }
 	];
 
@@ -46,6 +50,18 @@
 		const authenticated = await initializeAuth();
 		if (!authenticated && !get(auth).error) {
 			await goto('/auth/login?redirectTo=%2Fdashboard');
+			return;
+		}
+		await loadProfile();
+
+		// Sinkronkan status Step 2 (psikotes) dari riwayat attempt.
+		try {
+			const history = await getAttemptsApi();
+			setPsychotestCompleted(
+				(history.items ?? []).some((item) => item.status === 'COMPLETED')
+			);
+		} catch {
+			// Non-fatal: pertahankan status yang ada.
 		}
 	});
 </script>
@@ -170,27 +186,54 @@
 		</header>
 
 		<main class="mx-auto max-w-[1440px] px-5 py-7 sm:px-8 sm:py-9">
-			{#if $auth.user.isOnboardingCompleted ||
-				page.url.pathname === '/dashboard' ||
-				page.url.pathname === '/dashboard/onboarding'}
+			{#if page.url.pathname === '/dashboard' || page.url.pathname === '/dashboard/onboarding'}
+				{@render children()}
+			{:else if $onboarding.isLoadingProfile}
+				<div class="flex items-center justify-center gap-3 py-16 text-sm text-slate-500" aria-label="Memuat status akses">
+					<div class="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-indigo-600"></div>
+					Memuat status akses...
+				</div>
+			{:else if page.url.pathname.startsWith('/dashboard/psychotest')}
+				{#if $step1Complete}
+					{@render children()}
+				{:else}
+					<RequirementsStepsCard
+						title="Lengkapi profil untuk mulai tes psikotes"
+						description="Sebelum mengikuti tes, lengkapi profil dan ekstraksi CV terlebih dahulu."
+						steps={[
+							{
+								number: 1,
+								title: 'Lengkapi Profil & Ekstraksi CV',
+								description: 'Unggah CV dan tinjau data profilmu agar hasil tes bisa tersimpan dengan benar.',
+								completed: $step1Complete,
+								href: '/dashboard/onboarding'
+							}
+						]}
+					/>
+				{/if}
+			{:else if $step1Complete && $psychotest.hasCompleted}
 				{@render children()}
 			{:else}
-				<section class="mx-auto max-w-2xl rounded-2xl border border-amber-200 bg-white p-6 shadow-sm sm:p-8">
-					<p class="text-sm font-semibold text-amber-700">Lengkapi onboarding untuk melanjutkan</p>
-					<h1 class="mt-2 text-2xl font-semibold tracking-tight text-slate-950">
-						Fitur ini tersedia setelah profilmu lengkap.
-					</h1>
-					<p class="mt-3 text-sm leading-6 text-slate-600">
-						Lengkapi profil dan ekstraksi CV terlebih dahulu agar fitur ini bisa disesuaikan dengan
-						informasi kariermu.
-					</p>
-					<a
-						href="/dashboard/onboarding"
-						class="mt-5 inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700"
-					>
-						Lengkapi profil
-					</a>
-				</section>
+				<RequirementsStepsCard
+					title="Selesaikan 2 langkah untuk membuka fitur ini"
+					description="Fitur ini membutuhkan profil karier dan hasil tes psikotes agar bisa disesuaikan dengan kebutuhanmu."
+					steps={[
+						{
+							number: 1,
+							title: 'Lengkapi Profil & Ekstraksi CV',
+							description: 'Unggah CV, tinjau data profil, dan buat CV ATS-mu.',
+							completed: $step1Complete,
+							href: '/dashboard/onboarding'
+						},
+						{
+							number: 2,
+							title: 'Selesaikan Tes Psikotes',
+							description: 'Ikuti tes psikotes agar hasilnya bisa dilampirkan ke lamaran.',
+							completed: $psychotest.hasCompleted,
+							href: '/dashboard/psychotest'
+						}
+					]}
+				/>
 			{/if}
 		</main>
 	</div>

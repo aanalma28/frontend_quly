@@ -1,4 +1,4 @@
-import { get, writable, type Writable } from 'svelte/store';
+import { derived, get, writable, type Writable } from 'svelte/store';
 import { ApiError } from '#lib/utils/api.js';
 import { auth } from '#lib/stores/auth.js';
 import {
@@ -60,6 +60,28 @@ export const onboarding: Writable<OnboardingState> = writable(initialState);
 function patch(partial: Partial<OnboardingState>) {
 	onboarding.update((state) => ({ ...state, ...partial }));
 }
+
+/** Field wajib (bukan opsional) pada profil onboarding. */
+const REQUIRED_PROFILE_FIELDS = ['fullName', 'phone'] as const;
+
+function isNonEmptyString(value: unknown): boolean {
+	return typeof value === 'string' && value.trim().length > 0;
+}
+
+/**
+ * Validator Step 1 (Profil & Ekstraksi CV).
+ *
+ * Dianggap selesai hanya jika data onboarding sudah tersimpan di sisi backend
+ * (`hasSavedProfile`) dan field wajib (`fullName`, `phone`) terisi. Field lain
+ * bersifat opsional, sehingga tidak ikut menentukan status Step 1.
+ */
+export function isStep1Complete(state: OnboardingState): boolean {
+	const cv = state.rawCvData;
+	if (!state.hasSavedProfile || !cv) return false;
+	return REQUIRED_PROFILE_FIELDS.every((field) => isNonEmptyString(cv[field]));
+}
+
+export const step1Complete = derived(onboarding, isStep1Complete);
 
 function errorMessage(error: unknown): string {
 	if (error instanceof ApiError) return error.message;

@@ -7,7 +7,8 @@ const ACCESS_TOKEN_KEY = 'auth_access_token';
 export class ApiError extends Error {
 	constructor(
 		message: string,
-		public readonly status: number
+		public readonly status: number,
+		public readonly code?: string
 	) {
 		super(message);
 		this.name = 'ApiError';
@@ -36,19 +37,21 @@ export async function apiRequest(path: string, init: RequestInit = {}): Promise<
 	}
 	if (!response.ok) {
 		let message = `Permintaan gagal (${response.status}).`;
+		let code: string | undefined;
 		try {
 			const body: unknown = await response.clone().json();
 			if (typeof body === 'object' && body !== null) {
-				const details = body as { message?: unknown; error?: unknown };
+				const details = body as { message?: unknown; error?: unknown; code?: unknown };
 				const serverMessage = details.message ?? details.error;
 				if (typeof serverMessage === 'string') message = serverMessage;
 				else if (Array.isArray(serverMessage)) message = serverMessage.join(', ');
+				if (typeof details.code === 'string') code = details.code;
 			}
 		} catch {
 			const responseMessage = await response.text();
 			if (responseMessage) message = responseMessage;
 		}
-		throw new ApiError(message, response.status);
+		throw new ApiError(message, response.status, code);
 	}
 
 	return response;
