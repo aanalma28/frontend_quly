@@ -14,7 +14,7 @@
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import { get } from 'svelte/store';
-	import { auth, getUserRole, initializeAuth, isAdminRole, logout } from '#lib/stores/auth.js';
+	import { auth, getUserRole, homePathForRole, initializeAuth, isAdminRole, logout } from '#lib/stores/auth.js';
 	import { psychotest, setPsychotestCompleted } from '#lib/stores/psychotestStore.js';
 	import { getSessionsApi } from '#lib/services/psychotestApi.js';
 	import { loadProfile, onboarding, step1Complete } from '#lib/stores/onboardingStore.js';
@@ -56,7 +56,7 @@
 		}
 		isAdmin = isAdminRole(getUserRole());
 		if (isAdmin) {
-			await goto('/admin/psychotest/packages', { replaceState: true });
+			await goto(homePathForRole(getUserRole()), { replaceState: true });
 			return;
 		}
 		await loadProfile();

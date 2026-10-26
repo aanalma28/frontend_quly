@@ -4,10 +4,8 @@
 	import { page } from '$app/state';
 	import { get } from 'svelte/store';
 	import {
-		ArrowLeft,
 		Bot,
 		Boxes,
-		BrainCircuit,
 		Crown,
 		LayoutDashboard,
 		LogOut,
@@ -28,8 +26,7 @@
 		{ label: 'Subscribers', href: '/superadmin/subscribers', icon: Users },
 		{ label: 'Live Job Ingestion', href: '/superadmin/jobs', icon: Rss },
 		{ label: 'Ingestion Sources', href: '/superadmin/sources', icon: Plug },
-		{ label: 'OpenAI Economics', href: '/superadmin/ai-analytics', icon: Bot },
-		{ label: 'Psychotest Control', href: '/superadmin/psychotest', icon: BrainCircuit }
+		{ label: 'OpenAI Economics', href: '/superadmin/ai-analytics', icon: Bot }
 	];
 
 	function isActive(href: string, exact = false) {
@@ -109,12 +106,6 @@
 						Data pada cockpit ini masih mock dan belum terhubung ke API superadmin.
 					</p>
 				</div>
-				<a
-					href="/dashboard"
-					class="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/5 hover:text-white"
-				>
-					<ArrowLeft size={16} /> Kembali ke dashboard
-				</a>
 				<button
 					type="button"
 					onclick={logout}

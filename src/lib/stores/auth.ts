@@ -229,15 +229,16 @@ export async function login(
 		});
 		await fetchUserProfile();
 		const role = result.role ?? getUserRole();
-		const admin = isAdminRole(role);
-		const fallback = admin ? '/admin/psychotest/packages' : '/dashboard';
-		let target = redirectTo && redirectTo.trim() ? redirectTo : fallback;
-		// Admin selalu diarahkan ke panel admin, kecuali redirect memang ke /admin.
-		if (admin && !target.startsWith('/admin')) {
-			target = fallback;
+		const home = homePathForRole(role);
+		const allowedPrefix =
+			role === 'SUPER_ADMIN' ? '/superadmin' : role === 'ADMIN' ? '/admin' : '/dashboard';
+		let target = redirectTo && redirectTo.trim() ? redirectTo : home;
+		// Role menentukan area aplikasi yang boleh diakses setelah login.
+		if (!target.startsWith(allowedPrefix)) {
+			target = home;
 		}
 		const safeRedirect =
-			target.startsWith('/') && !target.startsWith('//') ? target : fallback;
+			target.startsWith('/') && !target.startsWith('//') ? target : home;
 		await goto(safeRedirect, { invalidateAll: true });
 	} catch (error) {
 		auth.update((state) => ({ ...state, isLoading: false, error: errorMessage(error) }));
@@ -277,8 +278,7 @@ export function loginWithGoogle(): void {
 export async function completeOAuthLogin(accessToken: string, refreshToken: string | null = null) {
 	saveAuthTokens(accessToken, refreshToken);
 	await fetchUserProfile();
-	const target = isAdminRole(getUserRole()) ? '/admin/psychotest/packages' : '/dashboard';
-	await goto(target, { invalidateAll: true });
+	await goto(homePathForRole(getUserRole()), { invalidateAll: true });
 }
 
 export async function initializeAuth(): Promise<boolean> {
@@ -349,6 +349,13 @@ export function isAdminRole(role: string | null): boolean {
 	return role === 'ADMIN' || role === 'SUPER_ADMIN';
 }
 
+/** Landing page for a role after login. */
+export function homePathForRole(role: string | null): string {
+	if (role === 'SUPER_ADMIN') return '/superadmin';
+	if (role === 'ADMIN') return '/admin/psychotest/packages';
+	return '/dashboard';
+}
+
 export const authStore = {
 	subscribe: auth.subscribe,
 	login,
@@ -358,5 +365,6 @@ export const authStore = {
 	loginWithGoogle,
 	fetchUserProfile,
 	getUserRole,
+	homePathForRole,
 	logout
 };

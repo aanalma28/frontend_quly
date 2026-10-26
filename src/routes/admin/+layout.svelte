@@ -5,13 +5,12 @@
 	import { get } from 'svelte/store';
 	import {
 		Activity,
-		ArrowLeft,
 		BookOpen,
 		LayoutList,
 		LogOut,
 		ShieldAlert
 	} from '@lucide/svelte';
-	import { auth, getUserRole, initializeAuth, isAdminRole, logout } from '#lib/stores/auth.js';
+	import { auth, getUserRole, initializeAuth, logout } from '#lib/stores/auth.js';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
@@ -34,8 +33,11 @@
 			await goto('/auth/login?redirectTo=%2Fadmin%2Fpsychotest%2Fpackages');
 			return;
 		}
-		if (!isAdminRole(getUserRole())) {
-			await goto('/dashboard', { replaceState: true });
+		const currentRole = getUserRole();
+		if (currentRole !== 'ADMIN') {
+			await goto(currentRole === 'SUPER_ADMIN' ? '/superadmin' : '/dashboard', {
+				replaceState: true
+			});
 			return;
 		}
 		checking = false;
@@ -85,7 +87,7 @@
 				{/each}
 			</nav>
 
-			<div class="mt-6 hidden space-y-2 md:mt-auto md:block">				
+			<div class="mt-6 hidden space-y-2 md:mt-auto md:block">
 				<button
 					type="button"
 					onclick={logout}
