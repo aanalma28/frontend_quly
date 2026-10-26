@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
-	import { authStore, saveAuthTokens } from '#lib/stores/auth.js';
+	import { authStore, getUserRole, isAdminRole, saveAuthTokens } from '#lib/stores/auth.js';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
 
 	onMount(async () => {
@@ -17,7 +17,10 @@
 		try {
 			saveAuthTokens(accessToken, refreshToken);
 			await authStore.fetchUserProfile();
-			await goto('/dashboard', { replaceState: true, invalidateAll: true });
+			const target = isAdminRole(getUserRole())
+				? '/admin/psychotest/packages'
+				: '/dashboard';
+			await goto(target, { replaceState: true, invalidateAll: true });
 		} catch {
 			await goto('/auth/login?error=OAuthFailed', { replaceState: true });
 		}

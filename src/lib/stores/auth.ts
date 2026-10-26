@@ -214,7 +214,7 @@ function errorMessage(error: unknown): string {
 export async function login(
 	email: string,
 	password: string,
-	redirectTo = '/dashboard'
+	redirectTo?: string
 ): Promise<void> {
 	auth.update((state) => ({ ...state, isLoading: true, error: null }));
 	try {
@@ -228,8 +228,16 @@ export async function login(
 			error: null
 		});
 		await fetchUserProfile();
+		const role = result.role ?? getUserRole();
+		const admin = isAdminRole(role);
+		const fallback = admin ? '/admin/psychotest/packages' : '/dashboard';
+		let target = redirectTo && redirectTo.trim() ? redirectTo : fallback;
+		// Admin selalu diarahkan ke panel admin, kecuali redirect memang ke /admin.
+		if (admin && !target.startsWith('/admin')) {
+			target = fallback;
+		}
 		const safeRedirect =
-			redirectTo.startsWith('/') && !redirectTo.startsWith('//') ? redirectTo : '/dashboard';
+			target.startsWith('/') && !target.startsWith('//') ? target : fallback;
 		await goto(safeRedirect, { invalidateAll: true });
 	} catch (error) {
 		auth.update((state) => ({ ...state, isLoading: false, error: errorMessage(error) }));
@@ -269,7 +277,8 @@ export function loginWithGoogle(): void {
 export async function completeOAuthLogin(accessToken: string, refreshToken: string | null = null) {
 	saveAuthTokens(accessToken, refreshToken);
 	await fetchUserProfile();
-	await goto('/dashboard', { invalidateAll: true });
+	const target = isAdminRole(getUserRole()) ? '/admin/psychotest/packages' : '/dashboard';
+	await goto(target, { invalidateAll: true });
 }
 
 export async function initializeAuth(): Promise<boolean> {
@@ -307,6 +316,39 @@ export function logoutToOnboardingLogin(): void {
 	window.location.assign('/login?message=onboarding_skipped');
 }
 
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+	const parts = token.split('.');
+	if (parts.length < 2 || typeof atob === 'undefined') return null;
+
+	try {
+		const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+		const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+		const bytes = Uint8Array.from(atob(padded), (char) => char.charCodeAt(0));
+		const json: unknown = JSON.parse(new TextDecoder().decode(bytes));
+		return isRecord(json) ? json : null;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Read the current user's role from the (already signed) access token payload.
+ * Used for UI gating only — the backend still enforces admin authorization.
+ */
+export function getUserRole(): string | null {
+	if (typeof localStorage === 'undefined') return null;
+	const token = localStorage.getItem(ACCESS_TOKEN_KEY);
+	if (!token) return null;
+
+	const payload = decodeJwtPayload(token);
+	const role = payload?.role;
+	return typeof role === 'string' ? role : null;
+}
+
+export function isAdminRole(role: string | null): boolean {
+	return role === 'ADMIN' || role === 'SUPER_ADMIN';
+}
+
 export const authStore = {
 	subscribe: auth.subscribe,
 	login,
@@ -315,5 +357,6 @@ export const authStore = {
 	verifyEmailVerificationCode,
 	loginWithGoogle,
 	fetchUserProfile,
+	getUserRole,
 	logout
 };

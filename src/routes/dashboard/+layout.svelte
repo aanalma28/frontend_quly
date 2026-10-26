@@ -14,7 +14,7 @@
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import { get } from 'svelte/store';
-	import { auth, initializeAuth, logout } from '#lib/stores/auth.js';
+	import { auth, getUserRole, initializeAuth, isAdminRole, logout } from '#lib/stores/auth.js';
 	import { psychotest, setPsychotestCompleted } from '#lib/stores/psychotestStore.js';
 	import { getSessionsApi } from '#lib/services/psychotestApi.js';
 	import { loadProfile, onboarding, step1Complete } from '#lib/stores/onboardingStore.js';
@@ -23,6 +23,8 @@
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
+
+	let isAdmin = $state(false);
 
 	const navigation = [
 		{ label: 'Ringkasan', href: '/dashboard', icon: LayoutDashboard },
@@ -50,6 +52,11 @@
 		const authenticated = await initializeAuth();
 		if (!authenticated && !get(auth).error) {
 			await goto('/auth/login?redirectTo=%2Fdashboard');
+			return;
+		}
+		isAdmin = isAdminRole(getUserRole());
+		if (isAdmin) {
+			await goto('/admin/psychotest/packages', { replaceState: true });
 			return;
 		}
 		await loadProfile();
@@ -95,6 +102,13 @@
 			>
 				Masuk ulang
 			</button>
+		</main>
+	{:else if isAdmin}
+		<main class="flex min-h-screen items-center justify-center px-5 py-24 text-center">
+			<div>
+				<div class="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-indigo-600"></div>
+				<p class="mt-3 text-sm text-slate-600">Mengalihkan ke panel admin...</p>
+			</div>
 		</main>
 	{:else if $auth.user}
 	<aside

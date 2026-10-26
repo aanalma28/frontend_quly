@@ -29,6 +29,8 @@ export interface LoginEmailRequest {
 export interface EmailAuthTokens {
 	accessToken: string;
 	refreshToken: string | null;
+	/** Role reported by the backend on login/register (ADMIN, SUPER_ADMIN, JOB_SEEKER, ...). */
+	role?: string | null;
 }
 
 export type EmailAuthRequester = (path: string, init?: RequestInit) => Promise<Response>;
@@ -74,7 +76,15 @@ function parseTokens(value: unknown): EmailAuthTokens {
 				? payload.refresh_token
 				: null;
 
-	return { accessToken, refreshToken };
+	const user =
+		typeof payload.user === 'object' && payload.user !== null && !Array.isArray(payload.user)
+			? (payload.user as Record<string, unknown>)
+			: null;
+	const role = typeof user?.role === 'string' ? user.role : null;
+
+	const tokens: EmailAuthTokens = { accessToken, refreshToken };
+	if (role) tokens.role = role;
+	return tokens;
 }
 
 export class EmailAuthFlow {

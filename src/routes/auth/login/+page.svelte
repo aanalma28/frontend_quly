@@ -29,7 +29,7 @@
 	);
 	const fieldErrors = $derived(validationAttempted ? getFieldErrors() : {});
 
-	const redirectTo = $derived(page.url.searchParams.get('redirectTo') || '/dashboard');
+	const redirectTo = $derived(page.url.searchParams.get('redirectTo') || undefined);
 
 	function handleGoogleLogin() {
 		window.location.href = getApiUrl('/auth/google');
