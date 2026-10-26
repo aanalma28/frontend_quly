@@ -1,49 +1,71 @@
 <script lang="ts">
-	import { Award, CheckCircle2, Download, RefreshCw, Sparkles, XCircle } from '@lucide/svelte';
+	import {
+		Award,
+		CheckCircle2,
+		Download,
+		QrCode,
+		RefreshCw,
+		Sparkles,
+		XCircle
+	} from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import Alert from '#lib/components/onboarding/Alert.svelte';
+	import WorkCurveChart from './WorkCurveChart.svelte';
 	import { ApiError } from '#lib/utils/api.js';
-	import {
-		categoryLabel,
-		categoryTone,
-		competencyLabel,
-		formatDate
-	} from './labels.js';
+	import { categoryLabel, categoryTone, competencyLabel, formatDate } from './labels.js';
 	import {
 		downloadCertificateApi,
 		generateCertificateApi,
-		type AttemptDetail,
-		type AttemptDetailPackage,
+		type AccuracyScoreResult,
+		type CognitiveScoreResult,
 		type PackageScoreResult,
-		type PersonalityPackageResult,
-		type ScoredPackageResult
+		type PersonalityScoreResult,
+		type SessionDetail
 	} from '#lib/services/psychotestApi.js';
 
 	interface Props {
-		attempt: AttemptDetail;
+		session: SessionDetail;
 	}
 
-	let { attempt }: Props = $props();
+	let { session }: Props = $props();
 
-	let generated = $state<AttemptDetail | null>(null);
+	let generated = $state<SessionDetail | null>(null);
 	let isGenerating = $state(false);
 	let isDownloading = $state(false);
 	let errorMessage = $state<string | null>(null);
 
-	const current = $derived<AttemptDetail>(generated ?? attempt);
+	const current = $derived<SessionDetail>(generated ?? session);
 	const aiAnalysis = $derived(current.aiAnalysis);
 	const quota = $derived(current.quota.certificate);
 	const quotaExhausted = $derived(quota.limit !== -1 && quota.remaining === 0);
 	const completedCount = $derived(
-		current.packages.filter((pkg) => pkg.status === 'COMPLETED').length
+		current.attempts.filter((attempt) => attempt.status === 'COMPLETED').length
 	);
 
-	function isScored(result: PackageScoreResult | null): result is ScoredPackageResult {
-		return !!result && (result.category === 'COGNITIVE' || result.category === 'ACCURACY');
+	function isCognitive(result: PackageScoreResult | null): result is CognitiveScoreResult {
+		return !!result && result.category === 'COGNITIVE';
 	}
 
-	function isPersonality(result: PackageScoreResult | null): result is PersonalityPackageResult {
+	function isAccuracy(result: PackageScoreResult | null): result is AccuracyScoreResult {
+		return !!result && result.category === 'ACCURACY';
+	}
+
+	function isPersonality(result: PackageScoreResult | null): result is PersonalityScoreResult {
 		return !!result && result.category === 'PERSONALITY';
+	}
+
+	function completionRatio(result: PackageScoreResult): string {
+		if (!result.totalQuestions) return '—';
+		return `${Math.round((result.answered / result.totalQuestions) * 100)}%`;
+	}
+
+	function avgTimeLabel(result: CognitiveScoreResult): string {
+		if (result.averageMsPerQuestion === null) return '—';
+		return `${(result.averageMsPerQuestion / 1000).toFixed(1)}s/soal`;
+	}
+
+	function workCurveCorrect(result: AccuracyScoreResult): number[] {
+		return (result.workCurve ?? []).map((point) => point.correct);
 	}
 
 	function quotaLabel(): string {
@@ -56,7 +78,7 @@
 		isGenerating = true;
 		errorMessage = null;
 		try {
-			generated = await generateCertificateApi(current.attemptId);
+			generated = await generateCertificateApi(current.sessionId);
 		} catch (error) {
 			if (error instanceof ApiError) {
 				if (error.status === 503) {
@@ -79,11 +101,11 @@
 		isDownloading = true;
 		errorMessage = null;
 		try {
-			const blob = await downloadCertificateApi(current.attemptId);
+			const blob = await downloadCertificateApi(current.sessionId);
 			const url = URL.createObjectURL(blob);
 			const link = document.createElement('a');
 			link.href = url;
-			link.download = `sertifikat-psikotes-${current.attemptId}.pdf`;
+			link.download = `laporan-psikotes-${current.sessionId}.pdf`;
 			document.body.appendChild(link);
 			link.click();
 			link.remove();
@@ -92,7 +114,7 @@
 			errorMessage =
 				error instanceof ApiError
 					? error.message
-					: 'Sertifikat belum dapat diunduh. Silakan coba lagi.';
+					: 'Laporan belum dapat diunduh. Silakan coba lagi.';
 		} finally {
 			isDownloading = false;
 		}
@@ -121,80 +143,143 @@
 				</div>
 			</div>
 			<span class="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
-				{completedCount}/{current.packages.length} paket selesai
+				{completedCount}/{current.attempts.length} paket selesai
 			</span>
 		</div>
 	</section>
 
 	<section class="space-y-4">
 		<h2 class="text-sm font-semibold uppercase tracking-[0.15em] text-slate-400">Hasil per paket</h2>
-		{#each current.packages as pkg (pkg.packageId)}
+		{#each current.attempts as attempt (attempt.attemptId)}
 			<article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
 				<div class="flex flex-wrap items-start justify-between gap-3">
 					<div>
-						<span class="rounded-full px-2.5 py-1 text-[11px] font-semibold {categoryTone[pkg.category]}">
-							{categoryLabel[pkg.category]}
+						<span class="rounded-full px-2.5 py-1 text-[11px] font-semibold {categoryTone[attempt.category]}">
+							{categoryLabel[attempt.category]}
 						</span>
-						<h3 class="mt-2 text-base font-semibold text-slate-950">{pkg.title}</h3>
+						<h3 class="mt-2 text-base font-semibold text-slate-950">{attempt.title}</h3>
 					</div>
-					{#if pkg.scoreResult && isScored(pkg.scoreResult)}
-						<span
-							class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold {pkg
-								.scoreResult.passed
-								? 'bg-emerald-50 text-emerald-700'
-								: 'bg-rose-50 text-rose-700'}"
-						>
-							{#if pkg.scoreResult.passed}
-								<CheckCircle2 size={13} /> Lulus
-							{:else}
-								<XCircle size={13} /> Belum lulus
-							{/if}
-						</span>
-					{:else if pkg.status === 'IN_PROGRESS'}
+					{#if attempt.status === 'IN_PROGRESS'}
 						<span class="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
 							Belum selesai
 						</span>
 					{/if}
 				</div>
 
-				{#if pkg.scoreResult}
-					{#if isScored(pkg.scoreResult)}
-						<dl class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-							<div class="rounded-xl bg-slate-50 p-3">
-								<dt class="text-[11px] font-medium text-slate-500">Benar</dt>
-								<dd class="mt-0.5 text-lg font-bold text-slate-900">{pkg.scoreResult.correct}</dd>
+				{#if isCognitive(attempt.scoreResult)}
+					<dl class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+						<div class="rounded-xl bg-slate-50 p-3">
+							<dt class="text-[11px] font-medium text-slate-500">Akurasi</dt>
+							<dd class="mt-0.5 text-lg font-bold text-slate-900">{attempt.scoreResult.accuracy}%</dd>
+						</div>
+						<div class="rounded-xl bg-slate-50 p-3">
+							<dt class="text-[11px] font-medium text-slate-500">Rasio Penyelesaian</dt>
+							<dd class="mt-0.5 text-lg font-bold text-slate-900">{completionRatio(attempt.scoreResult)}</dd>
+						</div>
+						<div class="rounded-xl bg-slate-50 p-3">
+							<dt class="text-[11px] font-medium text-slate-500">Efisiensi Waktu</dt>
+							<dd class="mt-0.5 text-lg font-bold text-slate-900">{avgTimeLabel(attempt.scoreResult)}</dd>
+						</div>
+						<div class="rounded-xl bg-slate-50 p-3">
+							<dt class="text-[11px] font-medium text-slate-500">Benar</dt>
+							<dd class="mt-0.5 text-lg font-bold text-slate-900">{attempt.scoreResult.correct}</dd>
+						</div>
+						<div class="rounded-xl bg-slate-50 p-3">
+							<dt class="text-[11px] font-medium text-slate-500">Salah</dt>
+							<dd class="mt-0.5 text-lg font-bold text-slate-900">{attempt.scoreResult.incorrect}</dd>
+						</div>
+					</dl>
+				{:else if isAccuracy(attempt.scoreResult)}
+					<dl class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+						<div class="rounded-xl bg-slate-50 p-3">
+							<dt class="text-[11px] font-medium text-slate-500">Akurasi</dt>
+							<dd class="mt-0.5 text-lg font-bold text-slate-900">{attempt.scoreResult.accuracy}%</dd>
+						</div>
+						<div class="rounded-xl bg-slate-50 p-3">
+							<dt class="text-[11px] font-medium text-slate-500">Rasio Penyelesaian</dt>
+							<dd class="mt-0.5 text-lg font-bold text-slate-900">{completionRatio(attempt.scoreResult)}</dd>
+						</div>
+						<div class="rounded-xl bg-slate-50 p-3">
+							<dt class="text-[11px] font-medium text-slate-500">Benar</dt>
+							<dd class="mt-0.5 text-lg font-bold text-slate-900">{attempt.scoreResult.correct}</dd>
+						</div>
+						<div class="rounded-xl bg-slate-50 p-3">
+							<dt class="text-[11px] font-medium text-slate-500">Salah</dt>
+							<dd class="mt-0.5 text-lg font-bold text-slate-900">{attempt.scoreResult.incorrect}</dd>
+						</div>
+					</dl>
+
+					{@const curve = workCurveCorrect(attempt.scoreResult)}
+					<div class="mt-4 rounded-xl border border-slate-100 bg-slate-50/50 p-4">
+						<h4 class="text-sm font-semibold text-slate-900">Kurva Kerja &amp; Stabilitas</h4>
+						{#if curve.length > 1}
+							<div class="mt-3">
+								<WorkCurveChart values={curve} />
 							</div>
-							<div class="rounded-xl bg-slate-50 p-3">
-								<dt class="text-[11px] font-medium text-slate-500">Salah</dt>
-								<dd class="mt-0.5 text-lg font-bold text-slate-900">{pkg.scoreResult.incorrect}</dd>
-							</div>
-							<div class="rounded-xl bg-slate-50 p-3">
-								<dt class="text-[11px] font-medium text-slate-500">Akurasi</dt>
-								<dd class="mt-0.5 text-lg font-bold text-slate-900">{pkg.scoreResult.accuracy}%</dd>
-							</div>
-							<div class="rounded-xl bg-slate-50 p-3">
-								<dt class="text-[11px] font-medium text-slate-500">Dilewati</dt>
-								<dd class="mt-0.5 text-lg font-bold text-slate-900">{pkg.scoreResult.skipped}</dd>
-							</div>
-						</dl>
-					{:else if isPersonality(pkg.scoreResult)}
-						<div class="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
-							<p class="text-[11px] font-medium text-indigo-600">Profil dominan</p>
-							<p class="mt-0.5 text-sm font-semibold text-slate-900">
-								{pkg.scoreResult.dominantTrait ?? pkg.scoreResult.dominantOption ?? '—'}
+						{:else}
+							<p class="mt-2 text-xs text-slate-400">
+								Data kurva kerja interval waktu belum tersedia.
 							</p>
-							{#if Object.keys(pkg.scoreResult.distribution).length > 0}
+						{/if}
+					</div>
+				{:else if isPersonality(attempt.scoreResult)}
+					<div class="mt-4 space-y-4">
+						{#if attempt.scoreResult.personalityType}
+							<span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
+								<Sparkles size={13} /> {attempt.scoreResult.personalityType}
+							</span>
+						{/if}
+						<p class="text-sm leading-6 text-slate-700">{attempt.scoreResult.summary}</p>
+
+						{#if attempt.scoreResult.workStyle.length > 0}
+							<div>
+								<p class="text-[11px] font-medium text-slate-500">Gaya kerja</p>
 								<div class="mt-2 flex flex-wrap gap-2">
-									{#each Object.entries(pkg.scoreResult.distribution) as [key, count] (key)}
-										<span class="rounded-md bg-white px-2 py-1 text-[11px] font-medium text-slate-600">
-											{key}: {count}
-										</span>
+									{#each attempt.scoreResult.workStyle as item (item)}
+										<span class="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-700">{item}</span>
 									{/each}
+								</div>
+							</div>
+						{/if}
+
+						<div class="grid gap-4 sm:grid-cols-2">
+							{#if attempt.scoreResult.strengths.length > 0}
+								<div>
+									<h4 class="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+										<CheckCircle2 size={14} class="text-emerald-600" /> Kekuatan
+									</h4>
+									<ul class="mt-2 space-y-1.5">
+										{#each attempt.scoreResult.strengths as item (item)}
+											<li class="flex items-start gap-2 text-sm leading-6 text-slate-600">
+												<span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500"></span>{item}
+											</li>
+										{/each}
+									</ul>
+								</div>
+							{/if}
+							{#if attempt.scoreResult.areasForImprovement.length > 0}
+								<div>
+									<h4 class="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+										<Award size={14} class="text-amber-600" /> Area pengembangan
+									</h4>
+									<ul class="mt-2 space-y-1.5">
+										{#each attempt.scoreResult.areasForImprovement as item (item)}
+											<li class="flex items-start gap-2 text-sm leading-6 text-slate-600">
+												<span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"></span>{item}
+											</li>
+										{/each}
+									</ul>
 								</div>
 							{/if}
 						</div>
-					{/if}
-					<p class="mt-3 text-sm leading-6 text-slate-600">{pkg.scoreResult.summary}</p>
+
+						{#if attempt.scoreResult.communicationStyle}
+							<p class="text-sm leading-6 text-slate-600">
+								<span class="font-semibold text-slate-900">Gaya komunikasi:</span>{' '}
+								{attempt.scoreResult.communicationStyle}
+							</p>
+						{/if}
+					</div>
 				{:else}
 					<p class="mt-3 text-sm text-slate-500">Paket ini belum dikerjakan.</p>
 				{/if}
@@ -226,10 +311,13 @@
 				<dd class="mt-0.5 text-lg font-bold text-slate-900">{current.aggregateScore.totalSkipped}</dd>
 			</div>
 		</dl>
-		{#if current.aggregateScore.personality?.dominantTrait}
-			<p class="mt-4 text-sm text-slate-600">
-				Profil kepribadian dominan:
-				<span class="font-semibold text-slate-900">{current.aggregateScore.personality.dominantTrait}</span>
+		{#if current.aggregateScore.personality?.summary}
+			<p class="mt-4 text-sm leading-6 text-slate-600">
+				<span class="font-semibold text-slate-900">Profil kepribadian:</span>{' '}
+				{current.aggregateScore.personality.personalityType
+					? `${current.aggregateScore.personality.personalityType} — `
+					: ''}
+				{current.aggregateScore.personality.summary}
 			</p>
 		{/if}
 	</section>
@@ -238,7 +326,7 @@
 		<div class="flex flex-wrap items-center justify-between gap-3">
 			<div class="flex items-center gap-2">
 				<Sparkles size={18} class="text-violet-600" />
-				<h2 class="text-lg font-semibold text-slate-950">Sertifikat &amp; Analisis AI</h2>
+				<h2 class="text-lg font-semibold text-slate-950">Laporan &amp; Analisis AI</h2>
 			</div>
 			<span class="rounded-full bg-white px-3 py-1 text-xs font-semibold text-violet-700 ring-1 ring-violet-100">
 				Kuota: {quotaLabel()}
@@ -296,7 +384,21 @@
 				</div>
 			{/if}
 
-			<div class="mt-6 flex flex-wrap items-center gap-3">
+			<div class="mt-6 rounded-xl border border-violet-100 bg-white/70 p-4">
+				<div class="flex items-start gap-3">
+					<QrCode size={20} class="mt-0.5 shrink-0 text-violet-600" />
+					<div>
+						<p class="text-sm font-semibold text-slate-900">Laporan resmi dengan QR Code validasi</p>
+						<p class="mt-1 text-xs leading-5 text-slate-600">
+							Dokumen PDF dilengkapi QR Code validasi resmi dan nomor registrasi terverifikasi
+							<span class="font-semibold text-slate-900">{aiAnalysis.certificateNumber}</span>
+							yang dapat dicek keasliannya oleh HRD perusahaan.
+						</p>
+					</div>
+				</div>
+			</div>
+
+			<div class="mt-4 flex flex-wrap items-center gap-3">
 				<button
 					type="button"
 					onclick={() => void download()}
@@ -304,16 +406,16 @@
 					class="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
 				>
 					{#if isDownloading}
-						<Spinner label="Mengunduh sertifikat" /> Mengunduh...
+						<Spinner label="Mengunduh laporan" /> Mengunduh...
 					{:else}
-						<Download size={16} /> Download Sertifikat PDF
+						<Download size={16} /> Unduh Laporan Resmi &amp; Sertifikat PDF
 					{/if}
 				</button>
 				<span class="text-xs text-slate-500">Diterbitkan {formatDate(aiAnalysis.issuedAt)}</span>
 			</div>
 		{:else}
 			<p class="mt-3 text-sm leading-6 text-slate-600">
-				Buat analisis AI dan sertifikat kompetensi berdasarkan hasil seluruh paket tes.
+				Buat analisis AI dan laporan resmi berdasarkan hasil seluruh paket tes.
 			</p>
 
 			{#if quotaExhausted}
@@ -332,7 +434,7 @@
 					{#if isGenerating}
 						<Spinner label="Membuat analisis AI" /> Membuat analisis AI...
 					{:else}
-						<Sparkles size={16} /> Generate Sertifikat &amp; Analisis AI
+						<Sparkles size={16} /> Generate Laporan &amp; Analisis AI
 					{/if}
 				</button>
 			</div>

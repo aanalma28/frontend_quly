@@ -7,21 +7,21 @@
 	import { setPsychotestCompleted } from '#lib/stores/psychotestStore.js';
 	import { categoryLabel, categoryTone } from '#lib/components/psychotest/labels.js';
 	import {
-		getAttemptsApi,
 		getPackagesApi,
-		startAttemptApi,
-		type AttemptHistoryItem,
-		type PsychotestPackage
+		getSessionsApi,
+		startSessionApi,
+		type PsychotestPackage,
+		type SessionHistoryItem
 	} from '#lib/services/psychotestApi.js';
 
 	let packages = $state<PsychotestPackage[]>([]);
-	let attempts = $state<AttemptHistoryItem[]>([]);
+	let sessions = $state<SessionHistoryItem[]>([]);
 	let isLoading = $state(true);
 	let loadError = $state<string | null>(null);
 	let errorMessage = $state<string | null>(null);
 	let isStarting = $state(false);
 
-	const inProgress = $derived(attempts.find((item) => item.status === 'IN_PROGRESS') ?? null);
+	const inProgress = $derived(sessions.find((item) => item.status === 'IN_PROGRESS') ?? null);
 
 	function formatDuration(minutes: number): string {
 		if (minutes < 60) return `${minutes} menit`;
@@ -34,10 +34,10 @@
 		isLoading = true;
 		loadError = null;
 		try {
-			const [packageList, history] = await Promise.all([getPackagesApi(), getAttemptsApi()]);
+			const [packageList, history] = await Promise.all([getPackagesApi(), getSessionsApi()]);
 			packages = Array.isArray(packageList) ? packageList : [];
-			attempts = history.items ?? [];
-			setPsychotestCompleted(attempts.some((item) => item.status === 'COMPLETED'));
+			sessions = history.items ?? [];
+			setPsychotestCompleted(sessions.some((item) => item.status === 'COMPLETED'));
 		} catch (error) {
 			loadError = error instanceof Error ? error.message : 'Data psikotes belum dapat dimuat.';
 		} finally {
@@ -45,13 +45,13 @@
 		}
 	}
 
-	async function startAttempt() {
+	async function startSession() {
 		if (isStarting) return;
 		isStarting = true;
 		errorMessage = null;
 		try {
-			const attempt = await startAttemptApi();
-			await goto(`/dashboard/psychotest/attempt/${attempt.attemptId}`);
+			const session = await startSessionApi();
+			await goto(`/dashboard/psychotest/session/${session.sessionId}`);
 		} catch (error) {
 			errorMessage = error instanceof Error ? error.message : 'Tes belum dapat dimulai.';
 			isStarting = false;
@@ -77,7 +77,7 @@
 			</h1>
 			<p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
 				Satu sesi tes mencakup seluruh paket psikotes. Setelah semua paket selesai, kamu bisa
-				membuat sertifikat dan analisis AI.
+				membuat laporan resmi dan analisis AI.
 			</p>
 		</div>
 		<a
@@ -97,11 +97,11 @@
 			<div>
 				<p class="text-sm font-semibold text-amber-800">Ada sesi tes yang belum selesai</p>
 				<p class="mt-1 text-xs text-amber-700">
-					Lanjutkan attempt sebelumnya agar semua paket terselesaikan.
+					Lanjutkan sesi sebelumnya agar semua paket terselesaikan.
 				</p>
 			</div>
 			<a
-				href={`/dashboard/psychotest/attempt/${inProgress.attemptId}`}
+				href={`/dashboard/psychotest/session/${inProgress.sessionId}`}
 				class="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 text-sm font-semibold text-white transition hover:bg-amber-700"
 			>
 				Lanjutkan <Play size={15} />
@@ -124,7 +124,7 @@
 			</div>
 			<button
 				type="button"
-				onclick={() => void startAttempt()}
+				onclick={() => void startSession()}
 				disabled={isStarting || isLoading || packages.length === 0}
 				class="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 text-sm font-semibold text-white shadow-sm shadow-indigo-200 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
 			>

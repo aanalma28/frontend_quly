@@ -1,15 +1,16 @@
 import { apiRequest } from '#lib/utils/api.js';
 
 /**
- * Psychotest (user-side) API client — attempt-centric.
+ * Psychotest (user-side) API client — session-centric.
  *
- * All requests go through `apiRequest`, which prepends the configured API base
- * URL and injects the Bearer token, so these resolve to `/api/psychotest/...`.
+ * A `PsychotestSession` covers all packages; each package is a
+ * `PsychotestAttempt`. All requests go through `apiRequest`, which prepends
+ * the configured API base URL and injects the Bearer token.
  */
 
 export type PsychotestCategory = 'PERSONALITY' | 'COGNITIVE' | 'ACCURACY';
 export type SessionStatus = 'IN_PROGRESS' | 'COMPLETED';
-export type AttemptStatus = 'IN_PROGRESS' | 'COMPLETED';
+export type AttemptStatus = SessionStatus;
 export type CompetencyLevel = 'BASIC' | 'INTERMEDIATE' | 'ADVANCED' | 'EXPERT';
 
 export interface PsychotestPackage {
@@ -22,21 +23,21 @@ export interface PsychotestPackage {
 	createdAt: string;
 }
 
-export interface AttemptPackage {
+export interface StartSessionPackage {
 	packageId: string;
-	sessionId: string;
+	attemptId: string;
 	title: string;
 	category: PsychotestCategory;
 	durationMin: number;
-	questionCount?: number;
+	questionCount: number;
 	status: SessionStatus;
 }
 
-export interface StartAttemptResponse {
-	attemptId: string;
+export interface StartSessionResponse {
+	sessionId: string;
 	status: AttemptStatus;
 	startedAt: string;
-	packages: AttemptPackage[];
+	packages: StartSessionPackage[];
 }
 
 export interface QuestionOption {
@@ -52,9 +53,9 @@ export interface PsychotestQuestion {
 }
 
 export interface QuestionsResponse {
-	attemptId: string;
-	packageId: string;
 	sessionId: string;
+	packageId: string;
+	attemptId: string;
 	title: string;
 	category: PsychotestCategory;
 	durationMin: number;
@@ -63,37 +64,69 @@ export interface QuestionsResponse {
 	questions: PsychotestQuestion[];
 }
 
-export interface ScoredPackageResult {
-	category: 'COGNITIVE' | 'ACCURACY';
+export interface WorkCurvePoint {
+	interval: number;
+	answered: number;
+	correct: number;
+}
+
+export interface CognitiveScoreResult {
+	category: 'COGNITIVE';
 	totalQuestions: number;
 	answered: number;
-	skipped: number;
 	correct: number;
 	incorrect: number;
 	accuracy: number;
-	passed: boolean;
-	summary: string;
+	durationMs: number;
+	averageMsPerQuestion: number | null;
 }
 
-export interface PersonalityPackageResult {
+export interface AccuracyScoreResult {
+	category: 'ACCURACY';
+	totalQuestions: number;
+	answered: number;
+	correct: number;
+	incorrect: number;
+	accuracy: number;
+	durationMs: number;
+	workCurve: WorkCurvePoint[];
+}
+
+export interface PersonalityScoreResult {
 	category: 'PERSONALITY';
 	totalQuestions: number;
 	answered: number;
-	skipped: number;
-	dominantOption: string | null;
-	dominantTrait: string | null;
-	distribution: Record<string, number>;
+	personalityType?: string;
 	summary: string;
+	workStyle: string[];
+	strengths: string[];
+	areasForImprovement: string[];
+	communicationStyle?: string;
 }
 
-export type PackageScoreResult = ScoredPackageResult | PersonalityPackageResult;
+export type PackageScoreResult =
+	| CognitiveScoreResult
+	| AccuracyScoreResult
+	| PersonalityScoreResult;
 
-export interface SubmitPackageResponse {
+export interface AttemptTiming {
+	durationMs: number;
+	elapsedPerQuestion?: Record<string, number>;
+}
+
+export interface SubmitAttemptPayload {
+	sessionId: string;
+	packageId: string;
+	answers: Record<string, string>;
+	timing?: AttemptTiming;
+}
+
+export interface SubmitAttemptResponse {
+	sessionId: string;
 	attemptId: string;
 	packageId: string;
-	sessionId: string;
 	packageStatus: SessionStatus;
-	attemptStatus: AttemptStatus;
+	sessionStatus: AttemptStatus;
 	allPackagesCompleted: boolean;
 	completedPackages: number;
 	totalPackages: number;
@@ -107,9 +140,8 @@ export interface AggregateScore {
 	totalIncorrect: number;
 	totalSkipped: number;
 	personality: {
-		dominantOption: string | null;
-		dominantTrait: string | null;
-		distribution: Record<string, number>;
+		personalityType: string | null;
+		summary: string | null;
 	} | null;
 	packages: Array<{
 		packageId: string;
@@ -138,9 +170,9 @@ export interface AiAnalysis {
 	aggregateScore: AggregateScore;
 }
 
-export interface AttemptDetailPackage {
+export interface SessionAttempt {
+	attemptId: string;
 	packageId: string;
-	sessionId: string;
 	title: string;
 	category: PsychotestCategory;
 	durationMin: number;
@@ -150,14 +182,14 @@ export interface AttemptDetailPackage {
 	scoreResult: PackageScoreResult | null;
 }
 
-export interface CertificateQuota {
+export interface QuotaSummary {
 	limit: number;
 	used: number;
 	remaining: number;
 }
 
-export interface AttemptDetail {
-	attemptId: string;
+export interface SessionDetail {
+	sessionId: string;
 	status: AttemptStatus;
 	startedAt: string;
 	completedAt: string | null;
@@ -165,21 +197,23 @@ export interface AttemptDetail {
 		fullName: string;
 		email: string;
 	};
-	packages: AttemptDetailPackage[];
+	attempts: SessionAttempt[];
 	aggregateScore: AggregateScore;
 	aiAnalysis: AiAnalysis | null;
 	certificate: {
 		available: boolean;
 		generatedAt: string | null;
 		downloadUrl: string | null;
+		verificationUrl: string | null;
 	};
 	quota: {
-		certificate: CertificateQuota;
+		certificate: QuotaSummary;
+		personality: QuotaSummary;
 	};
 }
 
-export interface AttemptHistoryItem {
-	attemptId: string;
+export interface SessionHistoryItem {
+	sessionId: string;
 	status: AttemptStatus;
 	startedAt: string;
 	completedAt: string | null;
@@ -195,76 +229,71 @@ export interface AttemptHistoryItem {
 	}>;
 }
 
-export interface AttemptHistoryResponse {
-	items: AttemptHistoryItem[];
+export interface SessionHistoryResponse {
+	items: SessionHistoryItem[];
 }
 
-/** Available psychotest packages (array, not wrapped in `{ items }`). */
+/** Available psychotest packages (array, not wrapped). */
 export async function getPackagesApi(): Promise<PsychotestPackage[]> {
 	const response = await apiRequest('psychotest/packages');
 	return (await response.json()) as PsychotestPackage[];
 }
 
-/** Start one attempt covering all packages (or `packageIds` if provided). */
-export async function startAttemptApi(packageIds?: string[]): Promise<StartAttemptResponse> {
-	const response = await apiRequest('psychotest/attempts', {
+/** Start one session covering all packages (or `packageIds` if provided). */
+export async function startSessionApi(packageIds?: string[]): Promise<StartSessionResponse> {
+	const response = await apiRequest('psychotest/session/start', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(packageIds && packageIds.length > 0 ? { packageIds } : {})
 	});
-	return (await response.json()) as StartAttemptResponse;
+	return (await response.json()) as StartSessionResponse;
 }
 
-/** Attempt history (newest first). */
-export async function getAttemptsApi(): Promise<AttemptHistoryResponse> {
-	const response = await apiRequest('psychotest/attempts');
-	return (await response.json()) as AttemptHistoryResponse;
+/** Session history (newest first). */
+export async function getSessionsApi(): Promise<SessionHistoryResponse> {
+	const response = await apiRequest('psychotest/sessions');
+	return (await response.json()) as SessionHistoryResponse;
 }
 
-/** Full attempt detail: progress, per-package results, aggregate, AI, certificate. */
-export async function getAttemptApi(attemptId: string): Promise<AttemptDetail> {
-	const response = await apiRequest(`psychotest/attempts/${attemptId}`);
-	return (await response.json()) as AttemptDetail;
+/** Full session detail: per-package attempts, aggregate, AI, certificate. */
+export async function getSessionApi(sessionId: string): Promise<SessionDetail> {
+	const response = await apiRequest(`psychotest/session/${sessionId}`);
+	return (await response.json()) as SessionDetail;
 }
 
-/** Questions for one package of an attempt (no `correctKey` is returned). */
+/** Questions for one package of a session (no `correctKey` is returned). */
 export async function getQuestionsApi(
-	attemptId: string,
+	sessionId: string,
 	packageId: string
 ): Promise<QuestionsResponse> {
 	const response = await apiRequest(
-		`psychotest/attempts/${attemptId}/packages/${packageId}/questions`
+		`psychotest/session/${sessionId}/package/${packageId}/questions`
 	);
 	return (await response.json()) as QuestionsResponse;
 }
 
-/** Submit answers for a single package. */
-export async function submitPackageApi(
-	attemptId: string,
-	packageId: string,
-	answers: Record<string, string>
-): Promise<SubmitPackageResponse> {
-	const response = await apiRequest(
-		`psychotest/attempts/${attemptId}/packages/${packageId}/submit`,
-		{
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ answers })
-		}
-	);
-	return (await response.json()) as SubmitPackageResponse;
+/** Submit answers for a single package attempt. */
+export async function submitAttemptApi(
+	payload: SubmitAttemptPayload
+): Promise<SubmitAttemptResponse> {
+	const response = await apiRequest('psychotest/attempt/submit', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(payload)
+	});
+	return (await response.json()) as SubmitAttemptResponse;
 }
 
-/** Generate the AI analysis + certificate (idempotent on the backend). */
-export async function generateCertificateApi(attemptId: string): Promise<AttemptDetail> {
-	const response = await apiRequest(`psychotest/attempts/${attemptId}/certificate`, {
+/** Generate the AI analysis + report (idempotent on the backend). */
+export async function generateCertificateApi(sessionId: string): Promise<SessionDetail> {
+	const response = await apiRequest(`psychotest/session/${sessionId}/certificate`, {
 		method: 'POST'
 	});
-	return (await response.json()) as AttemptDetail;
+	return (await response.json()) as SessionDetail;
 }
 
-/** Download the certificate PDF as a Blob (Authorization header is injected). */
-export async function downloadCertificateApi(attemptId: string): Promise<Blob> {
-	const response = await apiRequest(`psychotest/attempts/${attemptId}/certificate`);
+/** Download the report PDF as a Blob (Authorization header is injected). */
+export async function downloadCertificateApi(sessionId: string): Promise<Blob> {
+	const response = await apiRequest(`psychotest/session/${sessionId}/certificate`);
 	return await response.blob();
 }

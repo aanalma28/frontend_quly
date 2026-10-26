@@ -12,11 +12,11 @@
 	} from '#lib/components/psychotest/labels.js';
 	import {
 		downloadCertificateApi,
-		getAttemptsApi,
-		type AttemptHistoryItem
+		getSessionsApi,
+		type SessionHistoryItem
 	} from '#lib/services/psychotestApi.js';
 
-	let attempts = $state<AttemptHistoryItem[]>([]);
+	let sessions = $state<SessionHistoryItem[]>([]);
 	let isLoading = $state(true);
 	let loadError = $state<string | null>(null);
 	let errorMessage = $state<string | null>(null);
@@ -26,9 +26,9 @@
 		isLoading = true;
 		loadError = null;
 		try {
-			const response = await getAttemptsApi();
-			attempts = response.items ?? [];
-			setPsychotestCompleted(attempts.some((item) => item.status === 'COMPLETED'));
+			const response = await getSessionsApi();
+			sessions = response.items ?? [];
+			setPsychotestCompleted(sessions.some((item) => item.status === 'COMPLETED'));
 		} catch (error) {
 			loadError = error instanceof Error ? error.message : 'Riwayat belum dapat dimuat.';
 		} finally {
@@ -36,23 +36,22 @@
 		}
 	}
 
-	async function download(attemptId: string) {
+	async function download(sessionId: string) {
 		if (downloadingId) return;
-		downloadingId = attemptId;
+		downloadingId = sessionId;
 		errorMessage = null;
 		try {
-			const blob = await downloadCertificateApi(attemptId);
+			const blob = await downloadCertificateApi(sessionId);
 			const url = URL.createObjectURL(blob);
 			const link = document.createElement('a');
 			link.href = url;
-			link.download = `sertifikat-psikotes-${attemptId}.pdf`;
+			link.download = `laporan-psikotes-${sessionId}.pdf`;
 			document.body.appendChild(link);
 			link.click();
 			link.remove();
 			URL.revokeObjectURL(url);
 		} catch (error) {
-			errorMessage =
-				error instanceof Error ? error.message : 'Sertifikat belum dapat diunduh.';
+			errorMessage = error instanceof Error ? error.message : 'Laporan belum dapat diunduh.';
 		} finally {
 			downloadingId = null;
 		}
@@ -72,7 +71,7 @@
 		<div>
 			<p class="text-sm font-semibold text-indigo-600">Psikotes</p>
 			<h1 class="mt-1 text-3xl font-semibold tracking-tight text-slate-950">Riwayat psikotes</h1>
-			<p class="mt-2 text-sm text-slate-600">Lihat seluruh sesi tes, skor, dan sertifikatmu.</p>
+			<p class="mt-2 text-sm text-slate-600">Lihat seluruh sesi tes, skor, dan laporan resmi.</p>
 		</div>
 		<a
 			href="/dashboard/psychotest"
@@ -101,7 +100,7 @@
 				<RefreshCw size={15} /> Coba lagi
 			</button>
 		</div>
-	{:else if attempts.length === 0}
+	{:else if sessions.length === 0}
 		<div class="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
 			<span class="mx-auto flex size-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
 				<History size={24} />
@@ -117,7 +116,7 @@
 		</div>
 	{:else}
 		<div class="space-y-4">
-			{#each attempts as item (item.attemptId)}
+			{#each sessions as item (item.sessionId)}
 				<article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
 					<div class="flex flex-wrap items-start justify-between gap-3">
 						<div>
@@ -170,7 +169,7 @@
 
 					<div class="mt-5 flex flex-wrap items-center gap-2">
 						<a
-							href={`/dashboard/psychotest/attempt/${item.attemptId}`}
+							href={`/dashboard/psychotest/session/${item.sessionId}`}
 							class="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white transition hover:bg-indigo-700"
 						>
 							{#if item.status === 'IN_PROGRESS'}
@@ -182,14 +181,14 @@
 						{#if item.certificateAvailable}
 							<button
 								type="button"
-								onclick={() => void download(item.attemptId)}
-								disabled={downloadingId === item.attemptId}
+								onclick={() => void download(item.sessionId)}
+								disabled={downloadingId === item.sessionId}
 								class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-4 text-sm font-semibold text-violet-700 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60"
 							>
-								{#if downloadingId === item.attemptId}
-									<Spinner label="Mengunduh sertifikat" /> Mengunduh...
+								{#if downloadingId === item.sessionId}
+									<Spinner label="Mengunduh laporan" /> Mengunduh...
 								{:else}
-									<Download size={15} /> Download Sertifikat
+									<Download size={15} /> Download Laporan
 								{/if}
 							</button>
 						{/if}

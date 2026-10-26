@@ -16,7 +16,7 @@
 	import { get } from 'svelte/store';
 	import { auth, initializeAuth, logout } from '#lib/stores/auth.js';
 	import { psychotest, setPsychotestCompleted } from '#lib/stores/psychotestStore.js';
-	import { getAttemptsApi } from '#lib/services/psychotestApi.js';
+	import { getSessionsApi } from '#lib/services/psychotestApi.js';
 	import { loadProfile, onboarding, step1Complete } from '#lib/stores/onboardingStore.js';
 	import RequirementsStepsCard from '#lib/components/ui/RequirementsStepsCard.svelte';
 	import { goto } from '$app/navigation';
@@ -54,9 +54,9 @@
 		}
 		await loadProfile();
 
-		// Sinkronkan status Step 2 (psikotes) dari riwayat attempt.
+		// Sinkronkan status Step 2 (psikotes) dari riwayat sesi.
 		try {
-			const history = await getAttemptsApi();
+			const history = await getSessionsApi();
 			setPsychotestCompleted(
 				(history.items ?? []).some((item) => item.status === 'COMPLETED')
 			);

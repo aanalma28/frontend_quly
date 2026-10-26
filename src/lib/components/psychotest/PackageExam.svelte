@@ -6,19 +6,19 @@
 	import { categoryLabel, categoryTone } from './labels.js';
 	import {
 		getQuestionsApi,
-		submitPackageApi,
-		type AttemptDetailPackage,
+		submitAttemptApi,
 		type PsychotestQuestion,
-		type SubmitPackageResponse
+		type SessionAttempt,
+		type SubmitAttemptResponse
 	} from '#lib/services/psychotestApi.js';
 
 	interface Props {
-		attemptId: string;
-		packageInfo: AttemptDetailPackage;
-		onsubmitted: (result: SubmitPackageResponse) => void;
+		sessionId: string;
+		packageInfo: SessionAttempt;
+		onsubmitted: (result: SubmitAttemptResponse) => void;
 	}
 
-	let { attemptId, packageInfo, onsubmitted }: Props = $props();
+	let { sessionId, packageInfo, onsubmitted }: Props = $props();
 
 	let questions = $state<PsychotestQuestion[]>([]);
 	let isLoading = $state(true);
@@ -27,11 +27,13 @@
 	let isSubmitting = $state(false);
 
 	let answers = $state<Record<string, string>>({});
+	let answeredAt = $state<Record<string, number>>({});
 	let currentIndex = $state(0);
 	let remainingMs = $state(0);
 
 	let timerId: ReturnType<typeof setInterval> | undefined;
 	let deadline = 0;
+	let sessionStartAt = 0;
 
 	const currentQuestion = $derived<PsychotestQuestion | null>(questions[currentIndex] ?? null);
 	const answeredCount = $derived(questions.filter((q) => answers[q.id]).length);
@@ -63,13 +65,15 @@
 	}
 
 	function beginTimer() {
-		deadline = Date.now() + packageInfo.durationMin * 60_000;
+		sessionStartAt = Date.now();
+		deadline = sessionStartAt + packageInfo.durationMin * 60_000;
 		remainingMs = Math.max(0, deadline - Date.now());
 		resumeTimer();
 	}
 
 	function selectOption(questionId: string, optionId: string) {
 		answers = { ...answers, [questionId]: optionId };
+		answeredAt = { ...answeredAt, [questionId]: Date.now() - sessionStartAt };
 	}
 
 	function goPrev() {
@@ -90,7 +94,15 @@
 		isSubmitting = true;
 		errorMessage = null;
 		try {
-			const result = await submitPackageApi(attemptId, packageInfo.packageId, answers);
+			const result = await submitAttemptApi({
+				sessionId,
+				packageId: packageInfo.packageId,
+				answers,
+				timing: {
+					durationMs: Math.max(0, Date.now() - sessionStartAt),
+					elapsedPerQuestion: answeredAt
+				}
+			});
 			onsubmitted(result);
 		} catch (error) {
 			errorMessage =
@@ -105,7 +117,7 @@
 		isLoading = true;
 		loadError = null;
 		try {
-			const response = await getQuestionsApi(attemptId, packageInfo.packageId);
+			const response = await getQuestionsApi(sessionId, packageInfo.packageId);
 			questions = response.questions;
 			currentIndex = 0;
 			beginTimer();
