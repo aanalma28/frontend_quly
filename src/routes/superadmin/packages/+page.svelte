@@ -7,13 +7,13 @@
 	import { formatDateShort, formatNumber, formatRupiah } from '#lib/components/superadmin/format.js';
 	import { tierLabel, tierTone } from '#lib/components/superadmin/status.js';
 	import {
-		createPackage,
-		deletePackage,
-		listPackages,
-		togglePackage,
-		updatePackage,
-		type SubscriptionPackage,
-		type SubscriptionTierName
+		createPackageApi,
+		deletePackageApi,
+		listPackagesApi,
+		togglePackageApi,
+		updatePackageApi,
+		type PackageTier,
+		type SubscriptionPackage
 	} from '#lib/services/superadminApi.js';
 
 	let packages = $state<SubscriptionPackage[]>([]);
@@ -25,10 +25,10 @@
 	let modalOpen = $state(false);
 	let editing = $state<SubscriptionPackage | null>(null);
 	let formName = $state('');
-	let formTier = $state<SubscriptionTierName>('PRO');
+	let formTier = $state<PackageTier>('PRO');
 	let formPrice = $state('89000');
 	let formDuration = $state('30');
-	let formTokenQuota = $state('500000');
+	let formTokenLimit = $state('500000');
 	let formFeatures = $state<string[]>([]);
 	let featureInput = $state('');
 	let isSaving = $state(false);
@@ -38,8 +38,8 @@
 	let isDeleting = $state(false);
 	let togglingId = $state<string | null>(null);
 
-	const tiers: SubscriptionTierName[] = ['FREE', 'PRO', 'ENTERPRISE'];
-	const tierDefaultPrice: Record<SubscriptionTierName, string> = {
+	const tiers: PackageTier[] = ['FREE', 'PRO', 'ENTERPRISE'];
+	const tierDefaultPrice: Record<PackageTier, string> = {
 		FREE: '0',
 		PRO: '89000',
 		ENTERPRISE: '149000'
@@ -53,7 +53,7 @@
 		isLoading = true;
 		loadError = null;
 		try {
-			packages = await listPackages();
+			packages = await listPackagesApi();
 		} catch (error) {
 			loadError = errorText(error, 'Daftar paket belum dapat dimuat.');
 		} finally {
@@ -67,7 +67,7 @@
 		formTier = 'PRO';
 		formPrice = tierDefaultPrice.PRO;
 		formDuration = '30';
-		formTokenQuota = '500000';
+		formTokenLimit = '500000';
 		formFeatures = [];
 		featureInput = '';
 		formError = null;
@@ -80,7 +80,7 @@
 		formTier = pkg.tier;
 		formPrice = String(pkg.price);
 		formDuration = String(pkg.durationDays);
-		formTokenQuota = String(pkg.aiTokenQuota);
+		formTokenLimit = String(pkg.aiTokenLimit);
 		formFeatures = [...pkg.features];
 		featureInput = '';
 		formError = null;
@@ -93,7 +93,7 @@
 	}
 
 	function changeTier(value: string) {
-		formTier = value as SubscriptionTierName;
+		formTier = value as PackageTier;
 		if (!editing) formPrice = tierDefaultPrice[formTier];
 	}
 
@@ -117,7 +117,7 @@
 		const name = formName.trim();
 		const price = Number(formPrice);
 		const durationDays = Number(formDuration);
-		const aiTokenQuota = Number(formTokenQuota);
+		const aiTokenLimit = Number(formTokenLimit);
 
 		if (!name) {
 			formError = 'Nama paket wajib diisi.';
@@ -131,7 +131,7 @@
 			formError = 'Durasi harus bilangan bulat ≥ 1 hari.';
 			return;
 		}
-		if (!Number.isInteger(aiTokenQuota) || aiTokenQuota < 0) {
+		if (!Number.isInteger(aiTokenLimit) || aiTokenLimit < 0) {
 			formError = 'Kuota token AI harus bilangan bulat ≥ 0.';
 			return;
 		}
@@ -145,14 +145,14 @@
 				tier: formTier,
 				price,
 				durationDays,
-				aiTokenQuota,
+				aiTokenLimit,
 				features: formFeatures
 			};
 			if (editing) {
-				await updatePackage(editing.id, payload);
+				await updatePackageApi(editing.id, payload);
 				successMessage = 'Paket berhasil diperbarui.';
 			} else {
-				await createPackage(payload);
+				await createPackageApi(payload);
 				successMessage = 'Paket baru berhasil dibuat.';
 			}
 			modalOpen = false;
@@ -170,7 +170,7 @@
 		errorMessage = null;
 		successMessage = null;
 		try {
-			const updated = await togglePackage(pkg.id);
+			const updated = await togglePackageApi(pkg.id);
 			packages = packages.map((item) => (item.id === updated.id ? updated : item));
 			successMessage = `Paket "${updated.name}" ${updated.isActive ? 'diaktifkan' : 'dinonaktifkan'}.`;
 		} catch (error) {
@@ -187,7 +187,7 @@
 		errorMessage = null;
 		successMessage = null;
 		try {
-			await deletePackage(target.id);
+			await deletePackageApi(target.id);
 			deleteTarget = null;
 			successMessage = `Paket "${target.name}" berhasil dihapus.`;
 			await load();
@@ -274,6 +274,7 @@
 							<th class="px-5 py-3">Harga</th>
 							<th class="px-5 py-3">Durasi</th>
 							<th class="px-5 py-3">Kuota Token AI</th>
+							<th class="px-5 py-3">Subscriber</th>
 							<th class="px-5 py-3">Status</th>
 							<th class="px-5 py-3 text-right">Aksi</th>
 						</tr>
@@ -292,7 +293,8 @@
 								</td>
 								<td class="px-5 py-4 text-slate-200">{formatRupiah(pkg.price)}</td>
 								<td class="px-5 py-4 text-slate-300">{pkg.durationDays} hari</td>
-								<td class="px-5 py-4 text-slate-300">{formatNumber(pkg.aiTokenQuota)} token</td>
+								<td class="px-5 py-4 text-slate-300">{formatNumber(pkg.aiTokenLimit)} token</td>
+								<td class="px-5 py-4 text-slate-300">{formatNumber(pkg.subscriberCount)}</td>
 								<td class="px-5 py-4">
 									<div class="flex items-center gap-2">
 										<button
@@ -400,7 +402,7 @@
 			<label class="block space-y-1.5 text-sm font-medium text-slate-300">
 				Kuota Token AI <span class="text-rose-400">*</span>
 				<input
-					bind:value={formTokenQuota}
+					bind:value={formTokenLimit}
 					type="number"
 					min="0"
 					class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30"

@@ -100,12 +100,6 @@
 			</nav>
 
 			<div class="mt-6 hidden space-y-2 md:mt-auto md:block">
-				<div class="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-					<p class="text-[10px] font-semibold uppercase tracking-wide text-amber-300">Mode demo</p>
-					<p class="mt-1 text-[11px] leading-4 text-slate-500">
-						Data pada cockpit ini masih mock dan belum terhubung ke API superadmin.
-					</p>
-				</div>
 				<button
 					type="button"
 					onclick={logout}

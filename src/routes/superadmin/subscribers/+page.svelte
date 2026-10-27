@@ -4,7 +4,7 @@
 	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import Alert from '#lib/components/superadmin/Alert.svelte';
 	import Modal from '#lib/components/superadmin/Modal.svelte';
-	import { formatDateShort, formatNumber, formatRupiah } from '#lib/components/superadmin/format.js';
+	import { formatDateShort } from '#lib/components/superadmin/format.js';
 	import {
 		subscriptionStatusLabel,
 		subscriptionStatusTone,
@@ -12,59 +12,37 @@
 		tierTone
 	} from '#lib/components/superadmin/status.js';
 	import {
-		extendSubscription,
-		listPackages,
-		listSubscribers,
-		overrideSubscription,
-		type Subscriber,
-		type SubscriptionPackage,
-		type SubscriptionStatus
+		listSubscriptionsApi,
+		overrideSubscriptionApi,
+		type PaginationMeta,
+		type SubStatus,
+		type Subscription
 	} from '#lib/services/superadminApi.js';
 
-	let subscribers = $state<Subscriber[]>([]);
-	let packages = $state<SubscriptionPackage[]>([]);
+	let items = $state<Subscription[]>([]);
+	let meta = $state<PaginationMeta | null>(null);
 	let isLoading = $state(true);
 	let loadError = $state<string | null>(null);
 	let errorMessage = $state<string | null>(null);
 	let successMessage = $state<string | null>(null);
 
-	let statusFilter = $state<'' | SubscriptionStatus>('');
+	let statusFilter = $state<'' | SubStatus>('');
 	let searchInput = $state('');
 	let appliedSearch = $state('');
+	let page = $state(1);
 
-	let extendTarget = $state<Subscriber | null>(null);
+	let counts = $state({ active: 0, expired: 0, cancelled: 0 });
+
+	let extendTarget = $state<Subscription | null>(null);
 	let extendDays = $state('30');
 	let isExtending = $state(false);
 
-	let overrideTarget = $state<Subscriber | null>(null);
-	let overridePackageId = $state('');
-	let overrideExpiresAt = $state('');
-	let overrideStatus = $state<SubscriptionStatus>('ACTIVE');
+	let overrideTarget = $state<Subscription | null>(null);
+	let overrideEndDate = $state('');
+	let overrideStatus = $state<SubStatus>('ACTIVE');
 	let isOverriding = $state(false);
 
-	const statuses: SubscriptionStatus[] = ['ACTIVE', 'EXPIRED', 'CANCELLED'];
-
-	const filtered = $derived(
-		subscribers.filter((item) => {
-			if (statusFilter && item.status !== statusFilter) return false;
-			const query = appliedSearch.toLowerCase();
-			if (!query) return true;
-			return (
-				item.email.toLowerCase().includes(query) ||
-				item.fullName.toLowerCase().includes(query) ||
-				item.packageName.toLowerCase().includes(query)
-			);
-		})
-	);
-
-	const activeCount = $derived(subscribers.filter((item) => item.status === 'ACTIVE').length);
-	const expiredCount = $derived(subscribers.filter((item) => item.status === 'EXPIRED').length);
-	const cancelledCount = $derived(subscribers.filter((item) => item.status === 'CANCELLED').length);
-	const activeRevenue = $derived(
-		subscribers
-			.filter((item) => item.status === 'ACTIVE')
-			.reduce((sum, item) => sum + item.revenue, 0)
-	);
+	const statuses: SubStatus[] = ['ACTIVE', 'EXPIRED', 'CANCELLED'];
 
 	function toDateInput(iso: string): string {
 		return iso.slice(0, 10);
@@ -74,9 +52,24 @@
 		isLoading = true;
 		loadError = null;
 		try {
-			const [subs, pkgs] = await Promise.all([listSubscribers(), listPackages()]);
-			subscribers = subs;
-			packages = pkgs;
+			const [list, active, expired, cancelled] = await Promise.all([
+				listSubscriptionsApi({
+					status: statusFilter || undefined,
+					page,
+					limit: 20,
+					search: appliedSearch || undefined
+				}),
+				listSubscriptionsApi({ status: 'ACTIVE', limit: 1 }),
+				listSubscriptionsApi({ status: 'EXPIRED', limit: 1 }),
+				listSubscriptionsApi({ status: 'CANCELLED', limit: 1 })
+			]);
+			items = list.items;
+			meta = list.meta;
+			counts = {
+				active: active.meta.total,
+				expired: expired.meta.total,
+				cancelled: cancelled.meta.total
+			};
 		} catch (error) {
 			loadError = error instanceof Error ? error.message : 'Data pelanggan belum dapat dimuat.';
 		} finally {
@@ -86,18 +79,32 @@
 
 	function applySearch() {
 		appliedSearch = searchInput.trim();
+		page = 1;
+		void load();
 	}
 
-	function openExtend(subscriber: Subscriber) {
-		extendTarget = subscriber;
+	function changeStatus(value: string) {
+		statusFilter = value as '' | SubStatus;
+		page = 1;
+		void load();
+	}
+
+	function goToPage(next: number) {
+		if (!meta) return;
+		if (next < 1 || next > meta.totalPages) return;
+		page = next;
+		void load();
+	}
+
+	function openExtend(subscription: Subscription) {
+		extendTarget = subscription;
 		extendDays = '30';
 	}
 
-	function openOverride(subscriber: Subscriber) {
-		overrideTarget = subscriber;
-		overridePackageId = subscriber.packageId;
-		overrideExpiresAt = toDateInput(subscriber.expiresAt);
-		overrideStatus = subscriber.status;
+	function openOverride(subscription: Subscription) {
+		overrideTarget = subscription;
+		overrideEndDate = toDateInput(subscription.endDate);
+		overrideStatus = subscription.status;
 	}
 
 	async function submitExtend() {
@@ -111,10 +118,11 @@
 		errorMessage = null;
 		successMessage = null;
 		try {
-			const updated = await extendSubscription(extendTarget.id, days);
-			subscribers = subscribers.map((item) => (item.id === updated.id ? updated : item));
-			successMessage = `Langganan ${updated.email} diperpanjang ${days} hari.`;
+			const updated = await overrideSubscriptionApi(extendTarget.id, { extendDays: days });
+			items = items.map((item) => (item.id === updated.id ? updated : item));
+			successMessage = `Langganan ${updated.user.email} diperpanjang ${days} hari.`;
 			extendTarget = null;
+			await load();
 		} catch (error) {
 			errorMessage = error instanceof Error ? error.message : 'Perpanjangan gagal.';
 		} finally {
@@ -124,23 +132,23 @@
 
 	async function submitOverride() {
 		if (!overrideTarget || isOverriding) return;
-		if (!overridePackageId || !overrideExpiresAt) {
-			errorMessage = 'Paket dan tanggal kedaluwarsa wajib diisi.';
+		if (!overrideEndDate) {
+			errorMessage = 'Tanggal kedaluwarsa wajib diisi.';
 			return;
 		}
 		isOverriding = true;
 		errorMessage = null;
 		successMessage = null;
 		try {
-			const expiresAt = new Date(`${overrideExpiresAt}T23:59:59`).toISOString();
-			const updated = await overrideSubscription(overrideTarget.id, {
-				packageId: overridePackageId,
-				expiresAt,
+			const expiresAt = new Date(`${overrideEndDate}T23:59:59`).toISOString();
+			const updated = await overrideSubscriptionApi(overrideTarget.id, {
+				endDate: expiresAt,
 				status: overrideStatus
 			});
-			subscribers = subscribers.map((item) => (item.id === updated.id ? updated : item));
-			successMessage = `Langganan ${updated.email} berhasil di-override.`;
+			items = items.map((item) => (item.id === updated.id ? updated : item));
+			successMessage = `Langganan ${updated.user.email} berhasil di-override.`;
 			overrideTarget = null;
+			await load();
 		} catch (error) {
 			errorMessage = error instanceof Error ? error.message : 'Override gagal.';
 		} finally {
@@ -178,19 +186,19 @@
 	<section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
 		<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
 			<p class="text-xs font-medium text-slate-400">Active</p>
-			<p class="mt-1 text-2xl font-bold text-emerald-300">{activeCount}</p>
+			<p class="mt-1 text-2xl font-bold text-emerald-300">{counts.active}</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
 			<p class="text-xs font-medium text-slate-400">Expired</p>
-			<p class="mt-1 text-2xl font-bold text-amber-300">{expiredCount}</p>
+			<p class="mt-1 text-2xl font-bold text-amber-300">{counts.expired}</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
 			<p class="text-xs font-medium text-slate-400">Cancelled</p>
-			<p class="mt-1 text-2xl font-bold text-rose-300">{cancelledCount}</p>
+			<p class="mt-1 text-2xl font-bold text-rose-300">{counts.cancelled}</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-			<p class="text-xs font-medium text-slate-400">Active Revenue</p>
-			<p class="mt-1 text-xl font-bold text-white">{formatRupiah(activeRevenue)}</p>
+			<p class="text-xs font-medium text-slate-400">Total (filter)</p>
+			<p class="mt-1 text-2xl font-bold text-white">{meta?.total ?? 0}</p>
 		</div>
 	</section>
 
@@ -202,7 +210,7 @@
 				onkeydown={(event) => {
 					if (event.key === 'Enter') applySearch();
 				}}
-				placeholder="Cari email, nama, atau paket..."
+				placeholder="Cari email atau nama pelanggan..."
 				maxlength="160"
 				class="w-full rounded-lg border border-slate-700 bg-slate-950 py-2.5 pl-9 pr-3 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
 			/>
@@ -211,7 +219,7 @@
 			<SlidersHorizontal size={15} class="text-slate-500" />
 			<select
 				value={statusFilter}
-				onchange={(event) => (statusFilter = event.currentTarget.value as '' | SubscriptionStatus)}
+				onchange={(event) => changeStatus(event.currentTarget.value)}
 				class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white focus:border-indigo-500 focus:outline-none"
 			>
 				<option value="">Semua status</option>
@@ -244,7 +252,7 @@
 				<RefreshCw size={15} /> Coba lagi
 			</button>
 		</div>
-	{:else if filtered.length === 0}
+	{:else if items.length === 0}
 		<div class="rounded-2xl border border-dashed border-slate-700 bg-slate-900/40 p-12 text-center">
 			<span class="mx-auto flex size-12 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-300">
 				<Users size={24} />
@@ -262,42 +270,46 @@
 							<th class="px-5 py-3">Paket</th>
 							<th class="px-5 py-3">Mulai</th>
 							<th class="px-5 py-3">Kedaluwarsa</th>
+							<th class="px-5 py-3">Sisa Hari</th>
 							<th class="px-5 py-3">Status</th>
 							<th class="px-5 py-3 text-right">Aksi</th>
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-slate-800/70">
-						{#each filtered as subscriber (subscriber.id)}
+						{#each items as subscription (subscription.id)}
 							<tr class="hover:bg-slate-900">
 								<td class="px-5 py-4">
-									<p class="font-semibold text-white">{subscriber.fullName}</p>
-									<p class="text-xs text-slate-400">{subscriber.email}</p>
+									<p class="font-semibold text-white">
+										{subscription.user.fullName ?? subscription.user.email}
+									</p>
+									<p class="text-xs text-slate-400">{subscription.user.email}</p>
 								</td>
 								<td class="px-5 py-4">
-									<p class="text-slate-200">{subscriber.packageName}</p>
-									<span class="mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset {tierTone[subscriber.tier]}">
-										{tierLabel[subscriber.tier]}
+									<p class="text-slate-200">{subscription.package.name}</p>
+									<span class="mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset {tierTone[subscription.package.tier]}">
+										{tierLabel[subscription.package.tier]}
 									</span>
 								</td>
-								<td class="px-5 py-4 text-xs text-slate-400">{formatDateShort(subscriber.startedAt)}</td>
-								<td class="px-5 py-4 text-xs text-slate-400">{formatDateShort(subscriber.expiresAt)}</td>
+								<td class="px-5 py-4 text-xs text-slate-400">{formatDateShort(subscription.startDate)}</td>
+								<td class="px-5 py-4 text-xs text-slate-400">{formatDateShort(subscription.endDate)}</td>
+								<td class="px-5 py-4 text-slate-300">{subscription.remainingDays} hari</td>
 								<td class="px-5 py-4">
-									<span class="rounded-full px-2.5 py-1 text-[10px] font-semibold ring-1 ring-inset {subscriptionStatusTone[subscriber.status]}">
-										{subscriptionStatusLabel[subscriber.status]}
+									<span class="rounded-full px-2.5 py-1 text-[10px] font-semibold ring-1 ring-inset {subscriptionStatusTone[subscription.status]}">
+										{subscriptionStatusLabel[subscription.status]}
 									</span>
 								</td>
 								<td class="px-5 py-4">
 									<div class="flex flex-wrap justify-end gap-1.5">
 										<button
 											type="button"
-											onclick={() => openExtend(subscriber)}
+											onclick={() => openExtend(subscription)}
 											class="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 px-2.5 py-1.5 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/10"
 										>
 											<CalendarPlus size={13} /> Perpanjang
 										</button>
 										<button
 											type="button"
-											onclick={() => openOverride(subscriber)}
+											onclick={() => openOverride(subscription)}
 											class="inline-flex items-center gap-1 rounded-lg border border-slate-700 px-2.5 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-indigo-500/40 hover:bg-indigo-500/10 hover:text-indigo-200"
 										>
 											<SlidersHorizontal size={13} /> Override
@@ -309,6 +321,32 @@
 					</tbody>
 				</table>
 			</div>
+
+			{#if meta}
+				<div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 px-5 py-3">
+					<p class="text-xs text-slate-500">
+						Halaman {meta.page} dari {meta.totalPages} · {meta.total} langganan
+					</p>
+					<div class="flex gap-2">
+						<button
+							type="button"
+							onclick={() => goToPage(page - 1)}
+							disabled={meta.page <= 1}
+							class="inline-flex h-8 items-center justify-center rounded-lg border border-slate-700 px-3 text-xs font-semibold text-slate-300 transition hover:bg-slate-800 disabled:opacity-40"
+						>
+							Sebelumnya
+						</button>
+						<button
+							type="button"
+							onclick={() => goToPage(page + 1)}
+							disabled={meta.page >= meta.totalPages}
+							class="inline-flex h-8 items-center justify-center rounded-lg border border-slate-700 px-3 text-xs font-semibold text-slate-300 transition hover:bg-slate-800 disabled:opacity-40"
+						>
+							Selanjutnya
+						</button>
+					</div>
+				</div>
+			{/if}
 		</div>
 	{/if}
 </div>
@@ -316,13 +354,13 @@
 <Modal
 	open={extendTarget !== null}
 	title="Perpanjang Langganan"
-	description={extendTarget ? `${extendTarget.fullName} · ${extendTarget.packageName}` : ''}
+	description={extendTarget ? `${extendTarget.user.fullName ?? extendTarget.user.email} · ${extendTarget.package.name}` : ''}
 	onclose={() => (isExtending ? undefined : (extendTarget = null))}
 >
 	{#if extendTarget}
 		<div class="space-y-4">
 			<p class="text-sm text-slate-400">
-				Kedaluwarsa saat ini: <span class="text-slate-200">{formatDateShort(extendTarget.expiresAt)}</span>
+				Kedaluwarsa saat ini: <span class="text-slate-200">{formatDateShort(extendTarget.endDate)}</span>
 			</p>
 			<label class="block space-y-1.5 text-sm font-medium text-slate-300">
 				Tambah berapa hari?
@@ -360,26 +398,19 @@
 <Modal
 	open={overrideTarget !== null}
 	title="Override Langganan"
-	description={overrideTarget ? `${overrideTarget.fullName} · ${overrideTarget.email}` : ''}
+	description={overrideTarget ? `${overrideTarget.user.fullName ?? overrideTarget.user.email} · ${overrideTarget.package.name}` : ''}
 	onclose={() => (isOverriding ? undefined : (overrideTarget = null))}
 >
 	{#if overrideTarget}
 		<div class="space-y-4">
-			<label class="block space-y-1.5 text-sm font-medium text-slate-300">
-				Paket
-				<select
-					bind:value={overridePackageId}
-					class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white focus:border-indigo-500 focus:outline-none"
-				>
-					{#each packages as pkg (pkg.id)}
-						<option value={pkg.id}>{pkg.name} — {formatRupiah(pkg.price)}</option>
-					{/each}
-				</select>
-			</label>
+			<p class="text-sm text-slate-400">
+				Paket saat ini: <span class="text-slate-200">{overrideTarget.package.name}</span> (paket tidak dapat diubah
+				dari sini).
+			</p>
 			<label class="block space-y-1.5 text-sm font-medium text-slate-300">
 				Tanggal kedaluwarsa
 				<input
-					bind:value={overrideExpiresAt}
+					bind:value={overrideEndDate}
 					type="date"
 					class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white focus:border-indigo-500 focus:outline-none"
 				/>

@@ -11,28 +11,29 @@
 	} from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import KpiCard from '#lib/components/superadmin/KpiCard.svelte';
-	import LineChart from '#lib/components/superadmin/LineChart.svelte';
 	import {
-		formatCompact,
 		formatDate,
 		formatNumber,
 		formatRupiah,
 		formatUsd
 	} from '#lib/components/superadmin/format.js';
-	import { jobStatusLabel, jobStatusTone, tierLabel, tierTone } from '#lib/components/superadmin/status.js';
 	import {
-		getOverview,
-		listJobs,
-		listPackages,
-		type ExecutiveOverview,
-		type IngestedJob,
-		type RevenueCostPoint,
+		jobStatusLabel,
+		jobStatusTone,
+		tierLabel,
+		tierTone
+	} from '#lib/components/superadmin/status.js';
+	import {
+		getOverviewApi,
+		listJobsApi,
+		listPackagesApi,
+		type OverviewResponse,
+		type ScrapedJob,
 		type SubscriptionPackage
 	} from '#lib/services/superadminApi.js';
 
-	let overview = $state<ExecutiveOverview | null>(null);
-	let series = $state<RevenueCostPoint[]>([]);
-	let jobs = $state<IngestedJob[]>([]);
+	let overview = $state<OverviewResponse | null>(null);
+	let jobs = $state<ScrapedJob[]>([]);
 	let packages = $state<SubscriptionPackage[]>([]);
 	let isLoading = $state(true);
 	let loadError = $state<string | null>(null);
@@ -42,13 +43,12 @@
 		loadError = null;
 		try {
 			const [overviewData, jobList, packageList] = await Promise.all([
-				getOverview(),
-				listJobs(),
-				listPackages()
+				getOverviewApi(),
+				listJobsApi({ limit: 5 }),
+				listPackagesApi()
 			]);
-			overview = overviewData.overview;
-			series = overviewData.series;
-			jobs = jobList.slice(0, 5);
+			overview = overviewData;
+			jobs = jobList.items ?? [];
 			packages = packageList;
 		} catch (error) {
 			loadError = error instanceof Error ? error.message : 'Data cockpit belum dapat dimuat.';
@@ -61,21 +61,17 @@
 		void load();
 	});
 
-	const chartLabels = $derived(series.map((point) => point.month));
-	const chartSeries = $derived([
-		{ name: 'Revenue', color: '#6366f1', values: series.map((point) => point.revenue) },
-		{ name: 'OpenAI Cost', color: '#f43f5e', values: series.map((point) => point.cost) }
-	]);
-
-	const revenuePerSubscriber = $derived(
-		overview && overview.activeSubscribers > 0
-			? overview.grossRevenue / overview.activeSubscribers
+	const publishedJobs = $derived(overview?.jobs.byStatus?.PUBLISHED ?? 0);
+	const costShare = $derived(
+		overview && overview.revenue.totalIdr > 0
+			? (overview.ai.totalCostIdr / overview.revenue.totalIdr) * 100
 			: 0
 	);
-	const aiCostShare = $derived(
-		overview && overview.grossRevenue > 0
-			? (overview.openaiCostIdr / overview.grossRevenue) * 100
-			: 0
+	const jobStatusEntries = $derived(
+		overview ? Object.entries(overview.jobs.byStatus) : []
+	);
+	const maxJobStatus = $derived(
+		jobStatusEntries.reduce((max, [, value]) => (value > max ? value : max), 1)
 	);
 	const activePackages = $derived(packages.filter((item) => item.isActive));
 </script>
@@ -93,9 +89,14 @@
 				Ringkasan revenue, pelanggan aktif, biaya OpenAI, dan kesehatan operasional.
 			</p>
 		</div>
-		<span class="rounded-full border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-300">
-			Periode: 6 bulan terakhir
-		</span>
+		<button
+			type="button"
+			onclick={() => void load()}
+			disabled={isLoading}
+			class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-4 text-sm font-semibold text-slate-200 transition hover:bg-slate-800 disabled:opacity-60"
+		>
+			<RefreshCw size={15} /> Refresh
+		</button>
 	</header>
 
 	{#if isLoading}
@@ -117,36 +118,36 @@
 		<section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
 			<KpiCard
 				label="Total Gross Revenue"
-				value={formatRupiah(overview.grossRevenue)}
-				hint="Bulan ini"
+				value={formatRupiah(overview.revenue.totalIdr)}
+				hint="Dari langganan aktif"
 				icon={CircleDollarSign}
 				tone="emerald"
 			/>
 			<KpiCard
 				label="Active Subscribers"
-				value={formatNumber(overview.activeSubscribers)}
+				value={formatNumber(overview.revenue.activeSubscribers)}
 				hint="Langganan aktif"
 				icon={Users}
 				tone="indigo"
 			/>
 			<KpiCard
 				label="OpenAI Token Cost"
-				value={formatUsd(overview.openaiCostUsd)}
-				hint={`≈ ${formatRupiah(overview.openaiCostIdr)}`}
+				value={formatUsd(overview.ai.totalCostUsd)}
+				hint={`≈ ${formatRupiah(overview.ai.totalCostIdr)}`}
 				icon={Bot}
 				tone="violet"
 			/>
 			<KpiCard
 				label="Net Margin"
-				value={`${overview.netMarginPct}%`}
+				value={overview.ai.marginPercentage !== null ? `${overview.ai.marginPercentage}%` : '—'}
 				hint="Setelah biaya AI"
 				icon={TrendingUp}
 				tone="cyan"
 			/>
 			<KpiCard
 				label="Total Published Jobs"
-				value={formatNumber(overview.publishedJobs)}
-				hint="Lowongan tayang"
+				value={formatNumber(publishedJobs)}
+				hint={`${formatNumber(overview.jobs.total)} total lowongan`}
 				icon={BriefcaseBusiness}
 				tone="amber"
 			/>
@@ -157,39 +158,83 @@
 				<div class="flex flex-wrap items-start justify-between gap-3">
 					<div>
 						<h2 class="text-sm font-semibold text-white">Revenue vs OpenAI Infrastructure Cost</h2>
-						<p class="mt-1 text-xs text-slate-500">Perbandingan pendapatan dan biaya AI per bulan.</p>
+						<p class="mt-1 text-xs text-slate-500">Perbandingan pendapatan langganan aktif dan biaya AI.</p>
 					</div>
 					<span class="rounded-full bg-indigo-500/10 px-2.5 py-1 text-[10px] font-semibold text-indigo-300 ring-1 ring-indigo-500/20">
-						ChatGPT / GPT-4o
+						OpenAI
 					</span>
 				</div>
-				<div class="mt-4">
-					<LineChart labels={chartLabels} series={chartSeries} valueFormatter={(value) => formatCompact(value)} />
+
+				<div class="mt-5 space-y-4">
+					<div>
+						<div class="flex items-center justify-between text-xs">
+							<span class="text-slate-400">Revenue</span>
+							<span class="font-semibold text-white">{formatRupiah(overview.revenue.totalIdr)}</span>
+						</div>
+						<div class="mt-1.5 h-2.5 overflow-hidden rounded-full bg-slate-800">
+							<div class="h-full rounded-full bg-indigo-500" style:width="100%"></div>
+						</div>
+					</div>
+					<div>
+						<div class="flex items-center justify-between text-xs">
+							<span class="text-slate-400">OpenAI Cost</span>
+							<span class="font-semibold text-white">{formatRupiah(overview.ai.totalCostIdr)}</span>
+						</div>
+						<div class="mt-1.5 h-2.5 overflow-hidden rounded-full bg-slate-800">
+							<div class="h-full rounded-full bg-rose-500" style:width="{Math.max(costShare, 1)}%"></div>
+						</div>
+						<p class="mt-1 text-[11px] text-slate-500">
+							{costShare.toFixed(2)}% dari revenue
+						</p>
+					</div>
 				</div>
+
+				<dl class="mt-5 grid gap-3 sm:grid-cols-3">
+					<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+						<dt class="text-[11px] text-slate-500">Margin (IDR)</dt>
+						<dd class="mt-1 text-sm font-bold text-white">{formatRupiah(overview.ai.marginIdr)}</dd>
+					</div>
+					<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+						<dt class="text-[11px] text-slate-500">Revenue / pelanggan</dt>
+						<dd class="mt-1 text-sm font-bold text-white">
+							{formatRupiah(overview.revenue.averageRevenuePerSubscriberIdr)}
+						</dd>
+					</div>
+					<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+						<dt class="text-[11px] text-slate-500">AI requests</dt>
+						<dd class="mt-1 text-sm font-bold text-white">{formatNumber(overview.ai.totalRequests)}</dd>
+					</div>
+				</dl>
 			</div>
 
 			<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-				<h2 class="text-sm font-semibold text-white">Unit Economics</h2>
-				<p class="mt-1 text-xs text-slate-500">Efisiensi per pelanggan & biaya AI.</p>
-				<dl class="mt-4 space-y-3">
-					<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
-						<dt class="text-[11px] text-slate-500">Revenue / pelanggan aktif</dt>
-						<dd class="mt-1 text-lg font-bold text-white">{formatRupiah(revenuePerSubscriber)}</dd>
-					</div>
-					<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
-						<dt class="text-[11px] text-slate-500">Porsi biaya AI dari revenue</dt>
-						<dd class="mt-1 text-lg font-bold text-white">{aiCostShare.toFixed(2)}%</dd>
-					</div>
-					<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
-						<dt class="text-[11px] text-slate-500">Paket aktif</dt>
-						<dd class="mt-1 text-lg font-bold text-white">{activePackages.length} paket</dd>
-					</div>
-				</dl>
+				<h2 class="text-sm font-semibold text-white">Jobs by Status</h2>
+				<p class="mt-1 text-xs text-slate-500">Distribusi lowongan pada pipeline ingestion.</p>
+				{#if jobStatusEntries.length === 0}
+					<p class="mt-4 text-sm text-slate-500">Belum ada data lowongan.</p>
+				{:else}
+					<ul class="mt-4 space-y-3">
+						{#each jobStatusEntries as [status, count] (status)}
+							<li>
+								<div class="flex items-center justify-between text-xs">
+									<span class="text-slate-400">{status}</span>
+									<span class="font-semibold text-white">{formatNumber(count)}</span>
+								</div>
+								<div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-800">
+									<div
+										class="h-full rounded-full bg-indigo-500"
+										style:width="{(count / maxJobStatus) * 100}%"
+									></div>
+								</div>
+							</li>
+						{/each}
+					</ul>
+				{/if}
 				<a
-					href="/superadmin/ai-analytics"
+					href="/superadmin/jobs"
 					class="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-300 transition hover:text-indigo-200"
 				>
-					Lihat analitik biaya <ArrowRight size={14} />
+					Kelola lowongan <ArrowRight size={14} />
 				</a>
 			</div>
 		</section>
@@ -205,37 +250,41 @@
 						Semua lowongan <ArrowRight size={14} />
 					</a>
 				</div>
-				<div class="mt-4 overflow-x-auto">
-					<table class="min-w-full text-sm">
-						<thead class="text-left text-[11px] uppercase tracking-wide text-slate-500">
-							<tr>
-								<th class="pb-2 pr-4 font-semibold">Lowongan</th>
-								<th class="pb-2 pr-4 font-semibold">Sumber</th>
-								<th class="pb-2 pr-4 font-semibold">Status</th>
-								<th class="pb-2 font-semibold">Masuk</th>
-							</tr>
-						</thead>
-						<tbody class="divide-y divide-slate-800/70">
-							{#each jobs as job (job.id)}
+				{#if jobs.length === 0}
+					<p class="mt-4 text-sm text-slate-500">Belum ada lowongan yang di-ingest.</p>
+				{:else}
+					<div class="mt-4 overflow-x-auto">
+						<table class="min-w-full text-sm">
+							<thead class="text-left text-[11px] uppercase tracking-wide text-slate-500">
 								<tr>
-									<td class="py-3 pr-4">
-										<a href={`/superadmin/jobs/${job.id}`} class="font-medium text-slate-200 hover:text-white">
-											{job.parsed.title}
-										</a>
-										<p class="text-[11px] text-slate-500">{job.parsed.company}</p>
-									</td>
-									<td class="py-3 pr-4 text-xs text-slate-400">{job.source}</td>
-									<td class="py-3 pr-4">
-										<span class="rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset {jobStatusTone[job.status]}">
-											{jobStatusLabel[job.status]}
-										</span>
-									</td>
-									<td class="py-3 text-xs text-slate-500">{formatDate(job.ingestedAt)}</td>
+									<th class="pb-2 pr-4 font-semibold">Lowongan</th>
+									<th class="pb-2 pr-4 font-semibold">Sumber</th>
+									<th class="pb-2 pr-4 font-semibold">Status</th>
+									<th class="pb-2 font-semibold">Masuk</th>
 								</tr>
-							{/each}
-						</tbody>
-					</table>
-				</div>
+							</thead>
+							<tbody class="divide-y divide-slate-800/70">
+								{#each jobs as job (job.id)}
+									<tr>
+										<td class="py-3 pr-4">
+											<a href={`/superadmin/jobs/${job.id}`} class="font-medium text-slate-200 hover:text-white">
+												{job.jobTitle}
+											</a>
+											<p class="text-[11px] text-slate-500">{job.companyName}</p>
+										</td>
+										<td class="py-3 pr-4 text-xs text-slate-400">{job.sourceDetail}</td>
+										<td class="py-3 pr-4">
+											<span class="rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset {jobStatusTone[job.status]}">
+												{jobStatusLabel[job.status]}
+											</span>
+										</td>
+										<td class="py-3 text-xs text-slate-500">{formatDate(job.scrapedAt)}</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{/if}
 			</div>
 
 			<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
@@ -248,21 +297,26 @@
 						Kelola <ArrowRight size={14} />
 					</a>
 				</div>
-				<ul class="mt-4 space-y-2.5">
-					{#each packages as pkg (pkg.id)}
-						<li class="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2.5">
-							<div class="min-w-0">
-								<p class="truncate text-sm font-medium text-slate-200">{pkg.name}</p>
-								<p class="mt-0.5 text-[11px] text-slate-500">
-									{formatRupiah(pkg.price)} · {pkg.durationDays} hari
-								</p>
-							</div>
-							<span class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset {tierTone[pkg.tier]}">
-								{tierLabel[pkg.tier]}
-							</span>
-						</li>
-					{/each}
-				</ul>
+				{#if packages.length === 0}
+					<p class="mt-4 text-sm text-slate-500">Belum ada paket langganan.</p>
+				{:else}
+					<ul class="mt-4 space-y-2.5">
+						{#each packages as pkg (pkg.id)}
+							<li class="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2.5">
+								<div class="min-w-0">
+									<p class="truncate text-sm font-medium text-slate-200">{pkg.name}</p>
+									<p class="mt-0.5 text-[11px] text-slate-500">
+										{formatRupiah(pkg.price)} · {pkg.durationDays} hari · {formatNumber(pkg.subscriberCount)} subscriber
+									</p>
+								</div>
+								<span class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset {tierTone[pkg.tier]}">
+									{tierLabel[pkg.tier]}
+								</span>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+				<p class="mt-3 text-[11px] text-slate-500">{activePackages.length} paket aktif</p>
 			</div>
 		</section>
 	{/if}

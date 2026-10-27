@@ -11,43 +11,52 @@
 		sourceTypeLabel
 	} from '#lib/components/superadmin/status.js';
 	import {
-		listJobs,
-		type IngestedJob,
-		type JobStatus
+		listJobsApi,
+		type IngestionSourceType,
+		type JobStatus,
+		type PaginationMeta,
+		type ScrapedJob
 	} from '#lib/services/superadminApi.js';
 
-	let jobs = $state<IngestedJob[]>([]);
+	let items = $state<ScrapedJob[]>([]);
+	let meta = $state<PaginationMeta | null>(null);
 	let isLoading = $state(true);
 	let loadError = $state<string | null>(null);
+
 	let statusFilter = $state<JobStatus | 'ALL'>('ALL');
+	let sourceTypeFilter = $state<IngestionSourceType | 'ALL'>('ALL');
 	let searchInput = $state('');
 	let appliedSearch = $state('');
+	let page = $state(1);
 
-	const filtered = $derived(
-		jobs.filter((job) => {
-			if (statusFilter !== 'ALL' && job.status !== statusFilter) return false;
-			const query = appliedSearch.toLowerCase();
-			if (!query) return true;
-			return (
-				job.parsed.title.toLowerCase().includes(query) ||
-				job.parsed.company.toLowerCase().includes(query) ||
-				job.source.toLowerCase().includes(query)
-			);
-		})
-	);
-
-	const counts = $derived({
-		total: jobs.length,
-		raw: jobs.filter((job) => job.status === 'RAW_PARSED').length,
-		published: jobs.filter((job) => job.status === 'PUBLISHED').length,
-		rejected: jobs.filter((job) => job.status === 'REJECTED').length
-	});
+	const statuses: Array<JobStatus | 'ALL'> = [
+		'ALL',
+		'RAW_PARSED',
+		'PENDING_REVIEW',
+		'PUBLISHED',
+		'ARCHIVED',
+		'REJECTED'
+	];
+	const sourceTypes: Array<IngestionSourceType | 'ALL'> = [
+		'ALL',
+		'TELEGRAM_CHANNEL',
+		'CORPORATE_WEBSITE',
+		'MANUAL_INPUT'
+	];
 
 	async function load() {
 		isLoading = true;
 		loadError = null;
 		try {
-			jobs = await listJobs();
+			const response = await listJobsApi({
+				status: statusFilter === 'ALL' ? undefined : statusFilter,
+				sourceType: sourceTypeFilter === 'ALL' ? undefined : sourceTypeFilter,
+				page,
+				limit: 20,
+				search: appliedSearch || undefined
+			});
+			items = response.items;
+			meta = response.meta;
 		} catch (error) {
 			loadError = error instanceof Error ? error.message : 'Feed lowongan belum dapat dimuat.';
 		} finally {
@@ -57,14 +66,32 @@
 
 	function applySearch() {
 		appliedSearch = searchInput.trim();
+		page = 1;
+		void load();
 	}
 
-	const filters: Array<{ value: JobStatus | 'ALL'; label: string }> = [
-		{ value: 'ALL', label: 'Semua' },
-		{ value: 'RAW_PARSED', label: 'Raw Parsed' },
-		{ value: 'PUBLISHED', label: 'Published' },
-		{ value: 'REJECTED', label: 'Rejected' }
-	];
+	function changeStatus(value: JobStatus | 'ALL') {
+		statusFilter = value;
+		page = 1;
+		void load();
+	}
+
+	function changeSourceType(value: string) {
+		sourceTypeFilter = value as IngestionSourceType | 'ALL';
+		page = 1;
+		void load();
+	}
+
+	function goToPage(next: number) {
+		if (!meta) return;
+		if (next < 1 || next > meta.totalPages) return;
+		page = next;
+		void load();
+	}
+
+	function confidenceLabel(value: number | null): string {
+		return value === null ? '—' : `${Math.round(value * 100)}%`;
+	}
 
 	onMount(() => {
 		void load();
@@ -92,60 +119,57 @@
 		</a>
 	</header>
 
-	<section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-		<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-			<p class="text-xs font-medium text-slate-400">Total feed</p>
-			<p class="mt-1 text-2xl font-bold text-white">{counts.total}</p>
-		</div>
-		<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-			<p class="text-xs font-medium text-slate-400">Perlu audit</p>
-			<p class="mt-1 text-2xl font-bold text-amber-300">{counts.raw}</p>
-		</div>
-		<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-			<p class="text-xs font-medium text-slate-400">Published</p>
-			<p class="mt-1 text-2xl font-bold text-emerald-300">{counts.published}</p>
-		</div>
-		<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-			<p class="text-xs font-medium text-slate-400">Rejected</p>
-			<p class="mt-1 text-2xl font-bold text-rose-300">{counts.rejected}</p>
-		</div>
-	</section>
-
-	<div class="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 sm:flex-row sm:items-center sm:justify-between">
-		<div class="flex flex-wrap gap-1.5">
-			{#each filters as filter}
+	<div class="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+		<div class="flex flex-wrap items-center justify-between gap-3">
+			<div class="flex flex-wrap gap-1.5">
+				{#each statuses as status}
+					<button
+						type="button"
+						onclick={() => changeStatus(status)}
+						class="rounded-lg px-3 py-1.5 text-xs font-semibold transition {statusFilter === status
+							? 'bg-indigo-500 text-white'
+							: 'border border-slate-700 text-slate-300 hover:bg-slate-800'}"
+					>
+						{status === 'ALL' ? 'Semua' : jobStatusLabel[status]}
+					</button>
+				{/each}
+			</div>
+			<div class="flex items-center gap-2">
+				<select
+					value={sourceTypeFilter}
+					onchange={(event) => changeSourceType(event.currentTarget.value)}
+					class="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
+				>
+					{#each sourceTypes as type}
+						<option value={type}>
+							{type === 'ALL' ? 'Semua sumber' : sourceTypeLabel[type]}
+						</option>
+					{/each}
+				</select>
+				<div class="relative">
+					<Search size={15} class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+					<input
+						bind:value={searchInput}
+						onkeydown={(event) => {
+							if (event.key === 'Enter') applySearch();
+						}}
+						placeholder="Cari lowongan/perusahaan..."
+						maxlength="160"
+						class="w-56 rounded-lg border border-slate-700 bg-slate-950 py-2 pl-8 pr-3 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
+					/>
+				</div>
 				<button
 					type="button"
-					onclick={() => (statusFilter = filter.value)}
-					class="rounded-lg px-3 py-1.5 text-xs font-semibold transition {statusFilter === filter.value
-						? 'bg-indigo-500 text-white'
-						: 'border border-slate-700 text-slate-300 hover:bg-slate-800'}"
+					onclick={applySearch}
+					class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-indigo-500 px-3 text-xs font-semibold text-white transition hover:bg-indigo-400"
 				>
-					{filter.label}
+					Cari
 				</button>
-			{/each}
-		</div>
-		<div class="flex items-center gap-2">
-			<div class="relative">
-				<Search size={15} class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-				<input
-					bind:value={searchInput}
-					onkeydown={(event) => {
-						if (event.key === 'Enter') applySearch();
-					}}
-					placeholder="Cari lowongan/perusahaan..."
-					maxlength="160"
-					class="w-56 rounded-lg border border-slate-700 bg-slate-950 py-2 pl-8 pr-3 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
-				/>
 			</div>
-			<button
-				type="button"
-				onclick={applySearch}
-				class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-indigo-500 px-3 text-xs font-semibold text-white transition hover:bg-indigo-400"
-			>
-				Cari
-			</button>
 		</div>
+		{#if meta}
+			<p class="text-[11px] text-slate-500">{meta.total} lowongan pada filter ini</p>
+		{/if}
 	</div>
 
 	{#if isLoading}
@@ -163,7 +187,7 @@
 				<RefreshCw size={15} /> Coba lagi
 			</button>
 		</div>
-	{:else if filtered.length === 0}
+	{:else if items.length === 0}
 		<div class="rounded-2xl border border-dashed border-slate-700 bg-slate-900/40 p-12 text-center">
 			<span class="mx-auto flex size-12 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-300">
 				<Rss size={24} />
@@ -180,35 +204,35 @@
 							<th class="px-5 py-3">Lowongan</th>
 							<th class="px-5 py-3">Sumber</th>
 							<th class="px-5 py-3">Tipe Lamaran</th>
-							<th class="px-5 py-3">Match</th>
+							<th class="px-5 py-3">Confidence</th>
 							<th class="px-5 py-3">Status</th>
-							<th class="px-5 py-3">Masuk</th>
+							<th class="px-5 py-3">Scraped</th>
 							<th class="px-5 py-3 text-right">Aksi</th>
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-slate-800/70">
-						{#each filtered as job (job.id)}
+						{#each items as job (job.id)}
 							<tr class="hover:bg-slate-900">
 								<td class="px-5 py-4">
-									<p class="font-semibold text-white">{job.parsed.title}</p>
-									<p class="text-xs text-slate-400">{job.parsed.company} · {job.parsed.location}</p>
+									<p class="font-semibold text-white">{job.jobTitle}</p>
+									<p class="text-xs text-slate-400">{job.companyName} · {job.location}</p>
 								</td>
 								<td class="px-5 py-4">
 									<span class="inline-flex items-center gap-1.5 rounded-md border border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
 										{sourceTypeLabel[job.sourceType]}
 									</span>
-									<p class="mt-1 text-[11px] text-slate-500">{job.source}</p>
+									<p class="mt-1 text-[11px] text-slate-500">{job.sourceDetail}</p>
 								</td>
-								<td class="px-5 py-4 text-xs text-slate-300">{applicationTypeLabel[job.parsed.applicationType]}</td>
+								<td class="px-5 py-4 text-xs text-slate-300">{applicationTypeLabel[job.applicationType]}</td>
 								<td class="px-5 py-4">
-									<span class="text-sm font-semibold text-white">{job.matchScore}%</span>
+									<span class="text-sm font-semibold text-white">{confidenceLabel(job.confidenceScore)}</span>
 								</td>
 								<td class="px-5 py-4">
 									<span class="rounded-full px-2.5 py-1 text-[10px] font-semibold ring-1 ring-inset {jobStatusTone[job.status]}">
 										{jobStatusLabel[job.status]}
 									</span>
 								</td>
-								<td class="px-5 py-4 text-xs text-slate-500">{formatDate(job.ingestedAt)}</td>
+								<td class="px-5 py-4 text-xs text-slate-500">{formatDate(job.scrapedAt)}</td>
 								<td class="px-5 py-4 text-right">
 									<a
 										href={`/superadmin/jobs/${job.id}`}
@@ -222,6 +246,32 @@
 					</tbody>
 				</table>
 			</div>
+
+			{#if meta}
+				<div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-800 px-5 py-3">
+					<p class="text-xs text-slate-500">
+						Halaman {meta.page} dari {meta.totalPages} · {meta.total} lowongan
+					</p>
+					<div class="flex gap-2">
+						<button
+							type="button"
+							onclick={() => goToPage(page - 1)}
+							disabled={meta.page <= 1}
+							class="inline-flex h-8 items-center justify-center rounded-lg border border-slate-700 px-3 text-xs font-semibold text-slate-300 transition hover:bg-slate-800 disabled:opacity-40"
+						>
+							Sebelumnya
+						</button>
+						<button
+							type="button"
+							onclick={() => goToPage(page + 1)}
+							disabled={meta.page >= meta.totalPages}
+							class="inline-flex h-8 items-center justify-center rounded-lg border border-slate-700 px-3 text-xs font-semibold text-slate-300 transition hover:bg-slate-800 disabled:opacity-40"
+						>
+							Selanjutnya
+						</button>
+					</div>
+				</div>
+			{/if}
 		</div>
 	{/if}
 </div>

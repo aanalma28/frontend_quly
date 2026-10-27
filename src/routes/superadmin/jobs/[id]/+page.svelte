@@ -11,91 +11,106 @@
 	} from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import Alert from '#lib/components/superadmin/Alert.svelte';
-	import { formatDate } from '#lib/components/superadmin/format.js';
+	import { formatDate, formatNumber, formatUsd } from '#lib/components/superadmin/format.js';
 	import {
 		applicationTypeLabel,
+		employmentTypeLabel,
 		jobStatusLabel,
 		jobStatusTone,
-		sourceTypeLabel
+		sourceTypeLabel,
+		workplaceTypeLabel
 	} from '#lib/components/superadmin/status.js';
 	import {
-		getJob,
-		publishJob,
-		rejectJob,
-		updateJob,
+		getJobApi,
+		updateJobApi,
+		updateJobStatusApi,
 		type ApplicationType,
-		type IngestedJob,
-		type ParsedJob
+		type EmploymentType,
+		type JobRequirements,
+		type ScrapedJob,
+		type ScrapedJobDetail,
+		type UpdateScrapedJobInput,
+		type WorkplaceType
 	} from '#lib/services/superadminApi.js';
 	import type { PageProps } from './$types';
 
 	let { params }: PageProps = $props();
 	const jobId = $derived(params.id);
 
-	let job = $state<IngestedJob | null>(null);
+	let detail = $state<ScrapedJobDetail | null>(null);
+	let job = $state<ScrapedJob | null>(null);
 	let isLoading = $state(true);
 	let loadError = $state<string | null>(null);
 	let errorMessage = $state<string | null>(null);
 	let successMessage = $state<string | null>(null);
 
-	let formTitle = $state('');
-	let formCompany = $state('');
+	let formJobTitle = $state('');
+	let formCompanyName = $state('');
 	let formLocation = $state('');
-	let formSalary = $state('');
+	let formWorkplaceType = $state<WorkplaceType>('WFO');
+	let formEmploymentType = $state<EmploymentType>('FULL_TIME');
+	let formSalaryMin = $state('');
+	let formSalaryMax = $state('');
+	let formSalaryCurrency = $state('IDR');
+	let formSalaryConfidential = $state(false);
+	let formMinExperience = $state('');
+	let formEducation = $state('');
 	let formSkills = $state('');
-	let formApplicationType = $state<ApplicationType>('EMAIL');
-	let formDestination = $state('');
 	let formDescription = $state('');
+	let formApplicationType = $state<ApplicationType>('EMAIL');
+	let formApplicationDestination = $state('');
+	let formApplicationInstructions = $state('');
+	let formExpiresAt = $state('');
+	let formConfidence = $state('');
 
 	let isSaving = $state(false);
 	let isPublishing = $state(false);
 	let isDiscarding = $state(false);
 
-	const applicationTypes: ApplicationType[] = ['EMAIL', 'WEBSITE_PORTAL'];
+	const workplaceTypes: WorkplaceType[] = ['REMOTE', 'WFO', 'HYBRID'];
+	const employmentTypes: EmploymentType[] = ['FULL_TIME', 'CONTRACT', 'FREELANCE', 'INTERNSHIP'];
+	const applicationTypes: ApplicationType[] = ['EMAIL', 'WEBSITE_PORTAL', 'WHATSAPP', 'TELEGRAM'];
+
 	const inputClass =
 		'w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30';
 
-	function applyToForm(parsed: ParsedJob) {
-		formTitle = parsed.title;
-		formCompany = parsed.company;
-		formLocation = parsed.location;
-		formSalary = parsed.salaryRange;
-		formSkills = parsed.skills.join(', ');
-		formApplicationType = parsed.applicationType;
-		formDestination = parsed.applicationDestination;
-		formDescription = parsed.description;
+	function toDateInput(value: string | null): string {
+		return value ? value.slice(0, 10) : '';
 	}
 
-	function buildParsed(): ParsedJob {
-		return {
-			title: formTitle.trim(),
-			company: formCompany.trim(),
-			location: formLocation.trim(),
-			salaryRange: formSalary.trim(),
-			skills: formSkills
-				.split(',')
-				.map((skill) => skill.trim())
-				.filter(Boolean),
-			applicationType: formApplicationType,
-			applicationDestination: formDestination.trim(),
-			description: formDescription.trim()
-		};
-	}
-
-	function validate(parsed: ParsedJob): string | null {
-		if (!parsed.title) return 'Job title wajib diisi.';
-		if (!parsed.company) return 'Company wajib diisi.';
-		if (!parsed.applicationDestination) return 'Tujuan lamaran wajib diisi.';
-		return null;
+	function applyToForm(data: ScrapedJob) {
+		formJobTitle = data.jobTitle;
+		formCompanyName = data.companyName;
+		formLocation = data.location;
+		formWorkplaceType = (data.workplaceType as WorkplaceType) ?? 'WFO';
+		formEmploymentType = (data.employmentType as EmploymentType) ?? 'FULL_TIME';
+		formSalaryMin = data.salaryMin !== null ? String(data.salaryMin) : '';
+		formSalaryMax = data.salaryMax !== null ? String(data.salaryMax) : '';
+		formSalaryCurrency = data.salaryCurrency ?? 'IDR';
+		formSalaryConfidential = data.isSalaryConfidential;
+		formMinExperience =
+			data.requirements?.minExperienceYears !== undefined &&
+			data.requirements?.minExperienceYears !== null
+				? String(data.requirements.minExperienceYears)
+				: '';
+		formEducation = data.requirements?.education ?? '';
+		formSkills = (data.requirements?.skills ?? []).join(', ');
+		formDescription = data.jobDescriptionSummary ?? '';
+		formApplicationType = data.applicationType;
+		formApplicationDestination = data.applicationDestination;
+		formApplicationInstructions = data.applicationInstructions ?? '';
+		formExpiresAt = toDateInput(data.expiresAt);
+		formConfidence = data.confidenceScore !== null ? String(data.confidenceScore) : '';
 	}
 
 	async function load() {
 		isLoading = true;
 		loadError = null;
 		try {
-			const data = await getJob(jobId);
-			job = data;
-			applyToForm(data.parsed);
+			const data = await getJobApi(jobId);
+			detail = data;
+			job = data.job;
+			applyToForm(data.job);
 		} catch (error) {
 			loadError = error instanceof Error ? error.message : 'Lowongan belum dapat dimuat.';
 		} finally {
@@ -103,9 +118,53 @@
 		}
 	}
 
+	function buildPayload(): UpdateScrapedJobInput {
+		const requirements: JobRequirements = {
+			minExperienceYears: formMinExperience.trim() ? Number(formMinExperience) : null,
+			education: formEducation.trim() || null,
+			skills: formSkills
+				.split(',')
+				.map((skill) => skill.trim())
+				.filter(Boolean)
+		};
+
+		return {
+			jobTitle: formJobTitle.trim(),
+			companyName: formCompanyName.trim(),
+			location: formLocation.trim(),
+			workplaceType: formWorkplaceType,
+			employmentType: formEmploymentType,
+			salaryMin: formSalaryMin.trim() ? Number(formSalaryMin) : null,
+			salaryMax: formSalaryMax.trim() ? Number(formSalaryMax) : null,
+			salaryCurrency: formSalaryCurrency.trim() || null,
+			isSalaryConfidential: formSalaryConfidential,
+			requirements,
+			jobDescriptionSummary: formDescription.trim(),
+			applicationType: formApplicationType,
+			applicationDestination: formApplicationDestination.trim(),
+			applicationInstructions: formApplicationInstructions.trim() || null,
+			expiresAt: formExpiresAt ? new Date(`${formExpiresAt}T23:59:59`).toISOString() : null,
+			confidenceScore: formConfidence.trim() ? Number(formConfidence) : null
+		};
+	}
+
+	function validate(payload: UpdateScrapedJobInput): string | null {
+		if (!payload.jobTitle) return 'Job title wajib diisi.';
+		if (!payload.companyName) return 'Company wajib diisi.';
+		if (!payload.location) return 'Location wajib diisi.';
+		if (!payload.applicationDestination) return 'Tujuan lamaran wajib diisi.';
+		if (
+			typeof payload.confidenceScore === 'number' &&
+			(payload.confidenceScore < 0 || payload.confidenceScore > 1)
+		) {
+			return 'Confidence score harus antara 0 dan 1.';
+		}
+		return null;
+	}
+
 	async function saveOnly(): Promise<boolean> {
-		const parsed = buildParsed();
-		const problem = validate(parsed);
+		const payload = buildPayload();
+		const problem = validate(payload);
 		if (problem) {
 			errorMessage = problem;
 			return false;
@@ -114,8 +173,8 @@
 		errorMessage = null;
 		successMessage = null;
 		try {
-			const updated = await updateJob(jobId, parsed);
-			job = updated;
+			const updated = await updateJobApi(jobId, payload);
+			job = job ? { ...job, ...updated } : updated;
 			successMessage = 'Perubahan data lowongan berhasil disimpan.';
 			return true;
 		} catch (error) {
@@ -134,9 +193,7 @@
 		errorMessage = null;
 		successMessage = null;
 		try {
-			const updated = await publishJob(jobId);
-			job = updated;
-			successMessage = 'Lowongan berhasil dipublikasikan.';
+			await updateJobStatusApi(jobId, 'PUBLISHED');
 			await goto('/superadmin/jobs');
 		} catch (error) {
 			errorMessage = error instanceof Error ? error.message : 'Publikasi gagal.';
@@ -152,7 +209,7 @@
 		errorMessage = null;
 		successMessage = null;
 		try {
-			await rejectJob(jobId);
+			await updateJobStatusApi(jobId, 'REJECTED');
 			await goto('/superadmin/jobs');
 		} catch (error) {
 			errorMessage = error instanceof Error ? error.message : 'Gagal membuang lowongan.';
@@ -183,7 +240,7 @@
 			<ArrowLeft size={15} /> Kembali ke feed
 		</a>
 	</div>
-{:else if job}
+{:else if job && detail}
 	<div class="space-y-6">
 		<header class="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
 			<div>
@@ -193,14 +250,14 @@
 				>
 					<ArrowLeft size={15} /> Live Job Ingestion
 				</a>
-				<h1 class="mt-2 text-2xl font-bold tracking-tight text-white">{job.parsed.title}</h1>
+				<h1 class="mt-2 text-2xl font-bold tracking-tight text-white">{job.jobTitle}</h1>
 				<div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
 					<span class="rounded-full px-2.5 py-1 text-[10px] font-semibold ring-1 ring-inset {jobStatusTone[job.status]}">
 						{jobStatusLabel[job.status]}
 					</span>
-					<span>{sourceTypeLabel[job.sourceType]} · {job.source}</span>
-					<span>· Match {job.matchScore}%</span>
-					<span>· Masuk {formatDate(job.ingestedAt)}</span>
+					<span>{sourceTypeLabel[job.sourceType]} · {job.sourceDetail}</span>
+					<span>· Confidence {job.confidenceScore !== null ? `${Math.round(job.confidenceScore * 100)}%` : '—'}</span>
+					<span>· Scraped {formatDate(job.scrapedAt)}</span>
 				</div>
 			</div>
 		</header>
@@ -219,24 +276,66 @@
 						<ImageIcon size={16} class="text-indigo-300" />
 						<h2 class="text-sm font-semibold text-white">Poster Asli / Teks Mentah</h2>
 					</div>
-					{#if job.posterUrl}
+					{#if detail.raw.rawImagePayload}
 						<div class="mt-4 overflow-hidden rounded-xl border border-slate-800 bg-slate-950">
-							<img src={job.posterUrl} alt="Poster lowongan {job.parsed.title}" class="mx-auto max-h-[520px] w-auto object-contain" />
+							<img
+								src={detail.raw.rawImagePayload}
+								alt="Poster lowongan {job.jobTitle}"
+								class="mx-auto max-h-[520px] w-auto object-contain"
+							/>
 						</div>
 					{:else}
 						<div class="mt-4 rounded-xl border border-slate-800 bg-slate-950 p-4">
 							<p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Teks mentah</p>
-							<pre class="mt-2 whitespace-pre-wrap text-xs leading-6 text-slate-300">{job.rawText}</pre>
+							<pre class="mt-2 whitespace-pre-wrap text-xs leading-6 text-slate-300">{detail.raw.rawContent ?? 'Tidak ada teks mentah.'}</pre>
+						</div>
+					{/if}
+					<p class="mt-3 text-[11px] text-slate-500">
+						Sumber: {sourceTypeLabel[detail.raw.sourceType]} · {detail.raw.sourceDetail} ·
+						{formatDate(detail.raw.scrapedAt)}
+					</p>
+				</div>
+
+				{#if detail.raw.rawImagePayload && detail.raw.rawContent}
+					<details class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+						<summary class="cursor-pointer text-sm font-semibold text-white">Lihat teks mentah</summary>
+						<pre class="mt-3 whitespace-pre-wrap text-xs leading-6 text-slate-300">{detail.raw.rawContent}</pre>
+					</details>
+				{/if}
+
+				<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+					<h2 class="text-sm font-semibold text-white">AI Usage Log</h2>
+					{#if detail.aiUsageLogs.length === 0}
+						<p class="mt-2 text-xs text-slate-500">Belum ada log penggunaan AI untuk lowongan ini.</p>
+					{:else}
+						<div class="mt-3 overflow-x-auto">
+							<table class="min-w-full text-xs">
+								<thead class="text-left text-[10px] uppercase tracking-wide text-slate-500">
+									<tr>
+										<th class="pb-2 pr-3 font-semibold">Fitur</th>
+										<th class="pb-2 pr-3 font-semibold">Model</th>
+										<th class="pb-2 pr-3 font-semibold">Tokens</th>
+										<th class="pb-2 pr-3 font-semibold">Biaya</th>
+										<th class="pb-2 font-semibold">Waktu</th>
+									</tr>
+								</thead>
+								<tbody class="divide-y divide-slate-800/70">
+									{#each detail.aiUsageLogs as log (log.id)}
+										<tr>
+											<td class="py-2 pr-3 text-slate-300">{log.featureName}</td>
+											<td class="py-2 pr-3 text-slate-400">{log.modelName}</td>
+											<td class="py-2 pr-3 text-slate-300">
+												{formatNumber(log.promptTokens + log.completionTokens)}
+											</td>
+											<td class="py-2 pr-3 text-slate-300">{formatUsd(log.estimatedCostUsd)}</td>
+											<td class="py-2 text-slate-500">{formatDate(log.createdAt)}</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
 						</div>
 					{/if}
 				</div>
-
-				{#if job.posterUrl}
-					<details class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-						<summary class="cursor-pointer text-sm font-semibold text-white">Lihat teks mentah</summary>
-						<pre class="mt-3 whitespace-pre-wrap text-xs leading-6 text-slate-300">{job.rawText}</pre>
-					</details>
-				{/if}
 			</section>
 
 			<section class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
@@ -247,19 +346,66 @@
 					<div class="grid gap-4 sm:grid-cols-2">
 						<label class="block space-y-1.5 text-sm font-medium text-slate-300">
 							Job Title <span class="text-rose-400">*</span>
-							<input bind:value={formTitle} maxlength="200" class={inputClass} />
+							<input bind:value={formJobTitle} maxlength="200" class={inputClass} />
 						</label>
 						<label class="block space-y-1.5 text-sm font-medium text-slate-300">
 							Company <span class="text-rose-400">*</span>
-							<input bind:value={formCompany} maxlength="200" class={inputClass} />
+							<input bind:value={formCompanyName} maxlength="200" class={inputClass} />
 						</label>
 						<label class="block space-y-1.5 text-sm font-medium text-slate-300">
-							Location
+							Location <span class="text-rose-400">*</span>
 							<input bind:value={formLocation} maxlength="200" class={inputClass} />
 						</label>
 						<label class="block space-y-1.5 text-sm font-medium text-slate-300">
-							Salary Range
-							<input bind:value={formSalary} maxlength="200" class={inputClass} />
+							Workplace Type
+							<select bind:value={formWorkplaceType} class={inputClass}>
+								{#each workplaceTypes as type}
+									<option value={type}>{workplaceTypeLabel[type]}</option>
+								{/each}
+							</select>
+						</label>
+						<label class="block space-y-1.5 text-sm font-medium text-slate-300">
+							Employment Type
+							<select bind:value={formEmploymentType} class={inputClass}>
+								{#each employmentTypes as type}
+									<option value={type}>{employmentTypeLabel[type]}</option>
+								{/each}
+							</select>
+						</label>
+						<label class="block space-y-1.5 text-sm font-medium text-slate-300">
+							Confidence Score (0–1)
+							<input bind:value={formConfidence} type="number" min="0" max="1" step="0.01" class={inputClass} />
+						</label>
+					</div>
+
+					<div class="grid gap-4 sm:grid-cols-3">
+						<label class="block space-y-1.5 text-sm font-medium text-slate-300">
+							Salary Min
+							<input bind:value={formSalaryMin} type="number" min="0" class={inputClass} />
+						</label>
+						<label class="block space-y-1.5 text-sm font-medium text-slate-300">
+							Salary Max
+							<input bind:value={formSalaryMax} type="number" min="0" class={inputClass} />
+						</label>
+						<label class="block space-y-1.5 text-sm font-medium text-slate-300">
+							Currency
+							<input bind:value={formSalaryCurrency} maxlength="10" class={inputClass} />
+						</label>
+					</div>
+
+					<label class="flex items-center gap-2 text-sm text-slate-300">
+						<input bind:checked={formSalaryConfidential} type="checkbox" class="h-4 w-4 rounded border-slate-600 bg-slate-950 text-indigo-500" />
+						Gaji dirahasiakan
+					</label>
+
+					<div class="grid gap-4 sm:grid-cols-3">
+						<label class="block space-y-1.5 text-sm font-medium text-slate-300">
+							Min. Pengalaman (tahun)
+							<input bind:value={formMinExperience} type="number" min="0" class={inputClass} />
+						</label>
+						<label class="block space-y-1.5 text-sm font-medium text-slate-300 sm:col-span-2">
+							Pendidikan
+							<input bind:value={formEducation} maxlength="160" class={inputClass} />
 						</label>
 					</div>
 
@@ -278,14 +424,24 @@
 							</select>
 						</label>
 						<label class="block space-y-1.5 text-sm font-medium text-slate-300">
-							{formApplicationType === 'EMAIL' ? 'Email Tujuan' : 'URL Lamaran'} <span class="text-rose-400">*</span>
-							<input bind:value={formDestination} maxlength="2048" class={inputClass} />
+							Tujuan Lamaran <span class="text-rose-400">*</span>
+							<input bind:value={formApplicationDestination} maxlength="1000" class={inputClass} />
 						</label>
 					</div>
 
 					<label class="block space-y-1.5 text-sm font-medium text-slate-300">
-						Description
-						<textarea bind:value={formDescription} rows="4" maxlength="5000" class={inputClass}></textarea>
+						Instruksi Lamaran
+						<textarea bind:value={formApplicationInstructions} rows="2" maxlength="5000" class={inputClass}></textarea>
+					</label>
+
+					<label class="block space-y-1.5 text-sm font-medium text-slate-300">
+						Ringkasan Pekerjaan
+						<textarea bind:value={formDescription} rows="4" maxlength="10000" class={inputClass}></textarea>
+					</label>
+
+					<label class="block space-y-1.5 text-sm font-medium text-slate-300 sm:max-w-xs">
+						Berlaku Sampai
+						<input bind:value={formExpiresAt} type="date" class={inputClass} />
 					</label>
 				</div>
 
