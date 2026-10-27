@@ -10,8 +10,7 @@
 		LayoutDashboard,
 		LogOut,
 		Plug,
-		Rss,
-		Users
+		Rss
 	} from '@lucide/svelte';
 	import { auth, getUserRole, initializeAuth, logout } from '#lib/stores/auth.js';
 	import type { LayoutProps } from './$types';
@@ -22,11 +21,10 @@
 
 	const navigation = [
 		{ label: 'Executive Overview', href: '/superadmin', icon: LayoutDashboard, exact: true },
+		{ label: 'Live Job Ingestion & Audit', href: '/superadmin/jobs', icon: Rss },
+		{ label: 'Ingestion Sources (Telegram Channels)', href: '/superadmin/sources', icon: Plug },
 		{ label: 'Subscription Packages', href: '/superadmin/packages', icon: Boxes },
-		{ label: 'Subscribers', href: '/superadmin/subscribers', icon: Users },
-		{ label: 'Live Job Ingestion', href: '/superadmin/jobs', icon: Rss },
-		{ label: 'Ingestion Sources', href: '/superadmin/sources', icon: Plug },
-		{ label: 'OpenAI Economics', href: '/superadmin/ai-analytics', icon: Bot }
+		{ label: 'AI Cost & Token Analytics', href: '/superadmin/ai-analytics', icon: Bot }
 	];
 
 	function isActive(href: string, exact = false) {
@@ -86,7 +84,7 @@
 					<a
 						href={item.href}
 						aria-current={isActive(item.href, item.exact) ? 'page' : undefined}
-						class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition md:w-full {isActive(
+						class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium leading-snug transition md:w-full {isActive(
 							item.href,
 							item.exact
 						)

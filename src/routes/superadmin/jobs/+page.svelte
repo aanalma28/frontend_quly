@@ -40,8 +40,7 @@
 	const sourceTypes: Array<IngestionSourceType | 'ALL'> = [
 		'ALL',
 		'TELEGRAM_CHANNEL',
-		'CORPORATE_WEBSITE',
-		'MANUAL_INPUT'
+		'CORPORATE_WEBSITE'
 	];
 
 	async function load() {
@@ -105,17 +104,17 @@
 <div class="space-y-6">
 	<header class="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
 		<div>
-			<p class="text-sm font-semibold text-amber-300">Ingestion</p>
-			<h1 class="mt-1 text-2xl font-bold tracking-tight text-white">Live Job Ingestion</h1>
+			<p class="text-sm font-semibold text-amber-300">Telegram Scraper</p>
+			<h1 class="mt-1 text-2xl font-bold tracking-tight text-white">Live Job Ingestion &amp; Audit</h1>
 			<p class="mt-2 text-sm text-slate-400">
-				Feed lowongan hasil scrape Telegram & web, siap diaudit sebelum dipublikasikan.
+				Feed lowongan hasil scrape Telegram, siap direview dan diaudit sebelum dipublikasikan.
 			</p>
 		</div>
 		<a
 			href="/superadmin/sources"
 			class="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 text-sm font-semibold text-slate-200 transition hover:bg-slate-800"
 		>
-			Kelola sumber <ArrowRight size={16} />
+			Kontrol Scraper <ArrowRight size={16} />
 		</a>
 	</header>
 
@@ -202,11 +201,11 @@
 					<thead class="bg-slate-900 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
 						<tr>
 							<th class="px-5 py-3">Lowongan</th>
-							<th class="px-5 py-3">Sumber</th>
+							<th class="px-5 py-3">Source Channel</th>
 							<th class="px-5 py-3">Tipe Lamaran</th>
 							<th class="px-5 py-3">Confidence</th>
 							<th class="px-5 py-3">Status</th>
-							<th class="px-5 py-3">Scraped</th>
+							<th class="px-5 py-3">Waktu Masuk</th>
 							<th class="px-5 py-3 text-right">Aksi</th>
 						</tr>
 					</thead>
@@ -238,7 +237,7 @@
 										href={`/superadmin/jobs/${job.id}`}
 										class="inline-flex items-center gap-1 rounded-lg border border-slate-700 px-2.5 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-indigo-500/40 hover:bg-indigo-500/10 hover:text-indigo-200"
 									>
-										<Eye size={13} /> Audit
+										<Eye size={13} /> Review &amp; Audit
 									</a>
 								</td>
 							</tr>

@@ -19,6 +19,17 @@ export function getApiUrl(path: string): string {
 	return `${API_BASE_URL}/${path.replace(/^\/+/, '')}`;
 }
 
+/**
+ * Resolve a backend-served asset (e.g. `uploads/jobs/photo.jpg`) into an
+ * absolute URL. Data/remote URLs are returned unchanged.
+ */
+export function getAssetUrl(path: string | null | undefined): string | null {
+	if (!path) return null;
+	if (/^(?:https?:|data:|blob:)/i.test(path)) return path;
+	const origin = API_BASE_URL.replace(/\/api$/i, '');
+	return `${origin}/${path.replace(/^\/+/, '')}`;
+}
+
 export async function apiRequest(path: string, init: RequestInit = {}): Promise<Response> {
 	const headers = new Headers(init.headers);
 	if (!headers.has('Authorization') && typeof localStorage !== 'undefined') {

@@ -1,19 +1,18 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Antenna, Play, Plug, Plus, RefreshCw, Trash2 } from '@lucide/svelte';
+	import { Antenna, Plug, Plus, RefreshCw, Trash2 } from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import Alert from '#lib/components/superadmin/Alert.svelte';
 	import Modal from '#lib/components/superadmin/Modal.svelte';
+	import TelegramScraperControl from '#lib/components/superadmin/TelegramScraperControl.svelte';
 	import { formatDate } from '#lib/components/superadmin/format.js';
 	import { sourceTypeLabel, sourceTypeTone } from '#lib/components/superadmin/status.js';
 	import {
 		createSourceApi,
 		deleteSourceApi,
-		ingestSourceApi,
 		listSourcesApi,
 		toggleSourceApi,
-		type IngestionSource,
-		type IngestionSourceType
+		type IngestionSource
 	} from '#lib/services/superadminApi.js';
 
 	let sources = $state<IngestionSource[]>([]);
@@ -24,28 +23,19 @@
 
 	let modalOpen = $state(false);
 	let formName = $state('');
-	let formType = $state<IngestionSourceType>('TELEGRAM_CHANNEL');
 	let formIdentifier = $state('');
 	let isSaving = $state(false);
 	let formError = $state<string | null>(null);
 
 	let togglingId = $state<string | null>(null);
-	let runningId = $state<string | null>(null);
 	let deleteTarget = $state<IngestionSource | null>(null);
 	let isDeleting = $state(false);
 
-	const types: IngestionSourceType[] = [
-		'TELEGRAM_CHANNEL',
-		'CORPORATE_WEBSITE',
-		'MANUAL_INPUT'
-	];
-
-	const activeCount = $derived(sources.filter((item) => item.isActive).length);
-	const telegramCount = $derived(
-		sources.filter((item) => item.type === 'TELEGRAM_CHANNEL').length
+	const telegramSources = $derived(
+		sources.filter((source) => source.type === 'TELEGRAM_CHANNEL')
 	);
-	const webCount = $derived(
-		sources.filter((item) => item.type === 'CORPORATE_WEBSITE').length
+	const activeCount = $derived(
+		telegramSources.filter((source) => source.isActive).length
 	);
 
 	async function load() {
@@ -62,7 +52,6 @@
 
 	function openCreate() {
 		formName = '';
-		formType = 'TELEGRAM_CHANNEL';
 		formIdentifier = '';
 		formError = null;
 		modalOpen = true;
@@ -73,34 +62,44 @@
 		modalOpen = false;
 	}
 
+	function normalizeIdentifier(value: string): string {
+		const trimmed = value.trim();
+		if (!trimmed) return '';
+		if (trimmed.startsWith('@') || /^-?\d+$/.test(trimmed)) return trimmed;
+		if (trimmed.includes('t.me/')) {
+			const handle = trimmed.split('t.me/')[1]?.replace(/\/+$/, '') ?? '';
+			return handle ? (handle.startsWith('@') ? handle : `@${handle}`) : trimmed;
+		}
+		return `@${trimmed}`;
+	}
+
 	async function saveSource() {
 		if (isSaving) return;
 		formError = null;
 		const name = formName.trim();
-		const identifier = formIdentifier.trim();
+		const identifier = normalizeIdentifier(formIdentifier);
 		if (!name) {
-			formError = 'Nama sumber wajib diisi.';
+			formError = 'Nama channel wajib diisi.';
 			return;
 		}
 		if (!identifier) {
-			formError =
-				formType === 'TELEGRAM_CHANNEL'
-					? 'Channel ID / username wajib diisi.'
-					: formType === 'CORPORATE_WEBSITE'
-						? 'URL wajib diisi.'
-						: 'Identifier wajib diisi.';
+			formError = 'Username / Channel ID Telegram wajib diisi.';
 			return;
 		}
 		isSaving = true;
 		errorMessage = null;
 		successMessage = null;
 		try {
-			await createSourceApi({ name, type: formType, identifier });
-			successMessage = `Sumber "${name}" berhasil ditambahkan.`;
+			await createSourceApi({
+				name,
+				type: 'TELEGRAM_CHANNEL',
+				identifier
+			});
+			successMessage = `Channel "${name}" berhasil ditambahkan dan siap didengarkan bot.`;
 			modalOpen = false;
 			await load();
 		} catch (error) {
-			formError = error instanceof Error ? error.message : 'Sumber belum dapat ditambahkan.';
+			formError = error instanceof Error ? error.message : 'Channel belum dapat ditambahkan.';
 		} finally {
 			isSaving = false;
 		}
@@ -114,27 +113,11 @@
 		try {
 			const updated = await toggleSourceApi(source.id);
 			sources = sources.map((item) => (item.id === updated.id ? updated : item));
-			successMessage = `Bot listening "${updated.name}" ${updated.isActive ? 'diaktifkan' : 'dimatikan'}.`;
+			successMessage = `Channel "${updated.name}" ${updated.isActive ? 'diaktifkan' : 'dinonaktifkan'}.`;
 		} catch (error) {
-			errorMessage = error instanceof Error ? error.message : 'Status sumber gagal diubah.';
+			errorMessage = error instanceof Error ? error.message : 'Status channel gagal diubah.';
 		} finally {
 			togglingId = null;
-		}
-	}
-
-	async function runSource(source: IngestionSource) {
-		if (runningId || source.type === 'MANUAL_INPUT') return;
-		runningId = source.id;
-		errorMessage = null;
-		successMessage = null;
-		try {
-			const result = await ingestSourceApi(source.id);
-			successMessage = `Ingestion "${source.name}": ${result.ingested} job masuk, ${result.failed} gagal.`;
-			await load();
-		} catch (error) {
-			errorMessage = error instanceof Error ? error.message : 'Ingestion gagal dijalankan.';
-		} finally {
-			runningId = null;
 		}
 	}
 
@@ -147,10 +130,10 @@
 		try {
 			await deleteSourceApi(target.id);
 			sources = sources.filter((item) => item.id !== target.id);
-			successMessage = `Sumber "${target.name}" berhasil dihapus.`;
+			successMessage = `Channel "${target.name}" berhasil dihapus.`;
 			deleteTarget = null;
 		} catch (error) {
-			errorMessage = error instanceof Error ? error.message : 'Sumber gagal dihapus.';
+			errorMessage = error instanceof Error ? error.message : 'Channel gagal dihapus.';
 			deleteTarget = null;
 		} finally {
 			isDeleting = false;
@@ -169,10 +152,10 @@
 <div class="space-y-6">
 	<header class="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
 		<div>
-			<p class="text-sm font-semibold text-amber-300">Ingestion</p>
+			<p class="text-sm font-semibold text-amber-300">Telegram Scraper Control</p>
 			<h1 class="mt-1 text-2xl font-bold tracking-tight text-white">Ingestion Sources</h1>
 			<p class="mt-2 text-sm text-slate-400">
-				Kelola channel Telegram dan URL web scraping, serta nyalakan/matikan bot listening.
+				Kendalikan worker Telegram dan kelola channel yang didengarkan bot secara real-time.
 			</p>
 		</div>
 		<button
@@ -180,9 +163,11 @@
 			onclick={openCreate}
 			class="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 text-sm font-semibold text-white transition hover:bg-indigo-400"
 		>
-			<Plus size={16} /> Tambah Sumber
+			<Plus size={16} /> Tambah Channel Telegram
 		</button>
 	</header>
+
+	<TelegramScraperControl onchanged={() => void load()} />
 
 	{#if errorMessage}
 		<Alert type="error" message={errorMessage} dismissible ondismiss={() => (errorMessage = null)} />
@@ -191,28 +176,24 @@
 		<Alert type="success" message={successMessage} dismissible ondismiss={() => (successMessage = null)} />
 	{/if}
 
-	<section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+	<section class="grid gap-4 sm:grid-cols-3">
 		<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
 			<p class="text-xs font-medium text-slate-400">Total sumber</p>
 			<p class="mt-1 text-2xl font-bold text-white">{sources.length}</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-			<p class="text-xs font-medium text-slate-400">Listening aktif</p>
+			<p class="text-xs font-medium text-slate-400">Channel aktif</p>
 			<p class="mt-1 text-2xl font-bold text-emerald-300">{activeCount}</p>
 		</div>
 		<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-			<p class="text-xs font-medium text-slate-400">Telegram</p>
-			<p class="mt-1 text-2xl font-bold text-sky-300">{telegramCount}</p>
-		</div>
-		<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-			<p class="text-xs font-medium text-slate-400">Web scraping</p>
-			<p class="mt-1 text-2xl font-bold text-violet-300">{webCount}</p>
+			<p class="text-xs font-medium text-slate-400">Channel Telegram</p>
+			<p class="mt-1 text-2xl font-bold text-sky-300">{telegramSources.length}</p>
 		</div>
 	</section>
 
 	{#if isLoading}
 		<div class="flex items-center justify-center gap-3 py-20 text-sm text-slate-500">
-			<Spinner label="Memuat sumber" /> Memuat sumber...
+			<Spinner label="Memuat sumber" /> Memuat channel...
 		</div>
 	{:else if loadError}
 		<div class="mx-auto max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center">
@@ -230,28 +211,39 @@
 			<span class="mx-auto flex size-12 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-300">
 				<Plug size={24} />
 			</span>
-			<h2 class="mt-4 text-lg font-semibold text-white">Belum ada sumber</h2>
-			<p class="mt-1 text-sm text-slate-400">Tambahkan channel Telegram atau URL web untuk mulai scraping.</p>
+			<h2 class="mt-4 text-lg font-semibold text-white">Belum ada channel</h2>
+			<p class="mt-1 text-sm text-slate-400">
+				Tambahkan channel Telegram agar bot mulai menangkap lowongan.
+			</p>
 			<button
 				type="button"
 				onclick={openCreate}
 				class="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 text-sm font-semibold text-white transition hover:bg-indigo-400"
 			>
-				<Plus size={16} /> Tambah Sumber
+				<Plus size={16} /> Tambah Channel Telegram
 			</button>
 		</div>
 	{:else}
 		<div class="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60">
+			<div class="flex items-center justify-between border-b border-slate-800 px-5 py-3">
+				<h2 class="text-sm font-semibold text-white">Daftar Channel</h2>
+				<button
+					type="button"
+					onclick={() => void load()}
+					class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 transition hover:text-white"
+				>
+					<RefreshCw size={13} /> Refresh
+				</button>
+			</div>
 			<div class="overflow-x-auto">
 				<table class="min-w-full divide-y divide-slate-800 text-sm">
 					<thead class="bg-slate-900 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
 						<tr>
-							<th class="px-5 py-3">Sumber</th>
-							<th class="px-5 py-3">Tipe</th>
+							<th class="px-5 py-3">Channel</th>
 							<th class="px-5 py-3">Identifier</th>
-							<th class="px-5 py-3">Bot Listening</th>
-							<th class="px-5 py-3">Sinkron Terakhir</th>
-							<th class="px-5 py-3">Status</th>
+							<th class="px-5 py-3">Status Aktif</th>
+							<th class="px-5 py-3">Terakhir Dirayapi</th>
+							<th class="px-5 py-3">Status Message</th>
 							<th class="px-5 py-3 text-right">Aksi</th>
 						</tr>
 					</thead>
@@ -259,23 +251,23 @@
 						{#each sources as source (source.id)}
 							<tr class="hover:bg-slate-900">
 								<td class="px-5 py-4">
-									<div class="flex items-center gap-2">
-										<span class="flex size-8 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-300">
+									<div class="flex items-center gap-2.5">
+										<span class="flex size-8 items-center justify-center rounded-lg bg-sky-500/10 text-sky-300">
 											<Antenna size={15} />
 										</span>
-										<p class="font-semibold text-white">{source.name}</p>
+										<div class="min-w-0">
+											<p class="truncate font-semibold text-white">{source.name}</p>
+											<span class="mt-0.5 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset {sourceTypeTone[source.type]}">
+												{sourceTypeLabel[source.type]}
+											</span>
+										</div>
 									</div>
-								</td>
-								<td class="px-5 py-4">
-									<span class="rounded-full px-2.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset {sourceTypeTone[source.type]}">
-										{sourceTypeLabel[source.type]}
-									</span>
 								</td>
 								<td class="px-5 py-4">
 									<code class="rounded bg-slate-950 px-2 py-1 text-[11px] text-slate-300">{source.identifier}</code>
 								</td>
 								<td class="px-5 py-4">
-									<div class="flex items-center gap-2">
+									<div class="flex items-center gap-2.5">
 										<button
 											type="button"
 											role="switch"
@@ -293,39 +285,25 @@
 													: 'translate-x-0.5'}"
 											></span>
 										</button>
-										<span class="text-[11px] font-medium {source.isActive ? 'text-emerald-300' : 'text-slate-500'}">
-											{source.isActive ? 'Listening' : 'Non-aktif'}
+										<span
+											class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ring-inset {source.isActive
+												? 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30'
+												: 'bg-slate-800 text-slate-400 ring-slate-700'}"
+										>
+											{source.isActive ? 'Aktif' : 'Nonaktif'}
 										</span>
 									</div>
 								</td>
 								<td class="px-5 py-4 text-xs text-slate-400">{formatDate(source.lastScrapedAt)}</td>
 								<td class="px-5 py-4 text-xs text-slate-400">{source.statusMessage ?? '—'}</td>
-								<td class="px-5 py-4">
-									<div class="flex flex-wrap justify-end gap-1.5">
-										<button
-											type="button"
-											onclick={() => void runSource(source)}
-											disabled={runningId === source.id || source.type === 'MANUAL_INPUT'}
-											title={source.type === 'MANUAL_INPUT'
-												? 'Manual input dijalankan lewat API ingest dengan rawContent/imageUrl'
-												: 'Jalankan ingestion sekarang'}
-											class="inline-flex items-center gap-1 rounded-lg border border-slate-700 px-2.5 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-indigo-500/40 hover:bg-indigo-500/10 hover:text-indigo-200 disabled:opacity-40"
-										>
-											{#if runningId === source.id}
-												<Spinner label="Menjalankan" />
-											{:else}
-												<Play size={13} />
-											{/if}
-											Jalankan
-										</button>
-										<button
-											type="button"
-											onclick={() => (deleteTarget = source)}
-											class="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 px-2.5 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/10"
-										>
-											<Trash2 size={13} /> Hapus
-										</button>
-									</div>
+								<td class="px-5 py-4 text-right">
+									<button
+										type="button"
+										onclick={() => (deleteTarget = source)}
+										class="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 px-2.5 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/10"
+									>
+										<Trash2 size={13} /> Hapus
+									</button>
 								</td>
 							</tr>
 						{/each}
@@ -338,8 +316,8 @@
 
 <Modal
 	open={modalOpen}
-	title="Tambah Sumber Baru"
-	description="Tambahkan channel Telegram atau URL web untuk scraping."
+	title="Tambah Channel Telegram"
+	description="Channel baru langsung masuk ke database dan didengarkan oleh bot tanpa mengubah kode backend."
 	onclose={closeModal}
 >
 	<div class="space-y-4">
@@ -347,42 +325,30 @@
 			<Alert type="error" message={formError} />
 		{/if}
 		<label class="block space-y-1.5 text-sm font-medium text-slate-300">
-			Nama sumber <span class="text-rose-400">*</span>
+			Nama channel <span class="text-rose-400">*</span>
 			<input
 				bind:value={formName}
 				maxlength="160"
-				placeholder="Contoh: Loker Jogja"
+				placeholder="Contoh: Loker IT Jogja"
 				class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
 			/>
 		</label>
 		<label class="block space-y-1.5 text-sm font-medium text-slate-300">
-			Tipe
-			<select
-				bind:value={formType}
-				class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white focus:border-indigo-500 focus:outline-none"
-			>
-				{#each types as type}
-					<option value={type}>{sourceTypeLabel[type]}</option>
-				{/each}
-			</select>
-		</label>
-		<label class="block space-y-1.5 text-sm font-medium text-slate-300">
-			{formType === 'TELEGRAM_CHANNEL'
-				? 'Channel ID / Username'
-				: formType === 'CORPORATE_WEBSITE'
-					? 'URL Web'
-					: 'Identifier'} <span class="text-rose-400">*</span>
+			Username / Channel ID Telegram <span class="text-rose-400">*</span>
 			<input
 				bind:value={formIdentifier}
 				maxlength="500"
-				placeholder={formType === 'TELEGRAM_CHANNEL'
-					? '@lokerjogja atau -100...'
-					: formType === 'CORPORATE_WEBSITE'
-						? 'https://...'
-						: 'Identifier unik'}
+				placeholder="@loker_it atau -1001234567890"
 				class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none"
 			/>
 		</label>
+		<div class="rounded-xl border border-sky-500/20 bg-sky-500/5 p-3">
+			<p class="text-[11px] leading-5 text-sky-200/80">
+				Pastikan bot Telegram sudah ditambahkan sebagai admin/member channel. Jika username
+				ditulis tanpa <code class="rounded bg-slate-950 px-1">@</code>, sistem akan menambahkannya
+				otomatis.
+			</p>
+		</div>
 	</div>
 
 	{#snippet footer()}
@@ -401,20 +367,21 @@
 			class="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-indigo-500 px-4 text-sm font-semibold text-white transition hover:bg-indigo-400 disabled:opacity-60"
 		>
 			{#if isSaving}<Spinner label="Menyimpan" />{/if}
-			Tambah Sumber
+			Tambah Channel
 		</button>
 	{/snippet}
 </Modal>
 
 <Modal
 	open={deleteTarget !== null}
-	title="Hapus sumber?"
-	description="Bot listening untuk sumber ini akan dihentikan."
+	title="Hapus channel?"
+	description="Channel ini akan berhenti didengarkan oleh bot."
 	onclose={() => (isDeleting ? undefined : (deleteTarget = null))}
 >
 	{#if deleteTarget}
 		<p class="text-sm text-slate-300">
-			Hapus sumber <strong class="text-white">{deleteTarget.name}</strong>?
+			Hapus channel <strong class="text-white">{deleteTarget.name}</strong>
+			(<code class="rounded bg-slate-950 px-1.5 py-0.5 text-xs">{deleteTarget.identifier}</code>)?
 		</p>
 	{/if}
 

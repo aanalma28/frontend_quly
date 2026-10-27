@@ -50,14 +50,12 @@ export const jobStatusTone: Record<JobStatus, string> = {
 
 export const sourceTypeLabel: Record<IngestionSourceType, string> = {
 	TELEGRAM_CHANNEL: 'Telegram Channel',
-	CORPORATE_WEBSITE: 'Corporate Website',
-	MANUAL_INPUT: 'Manual Input'
+	CORPORATE_WEBSITE: 'Corporate Website'
 };
 
 export const sourceTypeTone: Record<IngestionSourceType, string> = {
 	TELEGRAM_CHANNEL: 'bg-sky-500/10 text-sky-300 ring-sky-500/20',
-	CORPORATE_WEBSITE: 'bg-violet-500/10 text-violet-300 ring-violet-500/20',
-	MANUAL_INPUT: 'bg-slate-500/10 text-slate-300 ring-slate-500/20'
+	CORPORATE_WEBSITE: 'bg-violet-500/10 text-violet-300 ring-violet-500/20'
 };
 
 export const applicationTypeLabel: Record<ApplicationType, string> = {

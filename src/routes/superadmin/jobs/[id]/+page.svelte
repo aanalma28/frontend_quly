@@ -7,11 +7,13 @@
 		CheckCircle2,
 		Image as ImageIcon,
 		Save,
-		Send
+		Send,
+		X
 	} from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import Alert from '#lib/components/superadmin/Alert.svelte';
 	import { formatDate, formatNumber, formatUsd } from '#lib/components/superadmin/format.js';
+	import { getAssetUrl } from '#lib/utils/api.js';
 	import {
 		applicationTypeLabel,
 		employmentTypeLabel,
@@ -39,6 +41,7 @@
 
 	let detail = $state<ScrapedJobDetail | null>(null);
 	let job = $state<ScrapedJob | null>(null);
+	const posterUrl = $derived(detail ? getAssetUrl(detail.raw.localImagePath) : null);
 	let isLoading = $state(true);
 	let loadError = $state<string | null>(null);
 	let errorMessage = $state<string | null>(null);
@@ -66,6 +69,7 @@
 	let isSaving = $state(false);
 	let isPublishing = $state(false);
 	let isDiscarding = $state(false);
+	let lightboxOpen = $state(false);
 
 	const workplaceTypes: WorkplaceType[] = ['REMOTE', 'WFO', 'HYBRID'];
 	const employmentTypes: EmploymentType[] = ['FULL_TIME', 'CONTRACT', 'FREELANCE', 'INTERNSHIP'];
@@ -226,6 +230,12 @@
 	<title>Audit Lowongan | Superadmin</title>
 </svelte:head>
 
+<svelte:window
+	onkeydown={(event) => {
+		if (event.key === 'Escape') lightboxOpen = false;
+	}}
+/>
+
 {#if isLoading}
 	<div class="flex items-center justify-center gap-3 py-20 text-sm text-slate-500">
 		<Spinner label="Memuat lowongan" /> Memuat lowongan...
@@ -276,13 +286,25 @@
 						<ImageIcon size={16} class="text-indigo-300" />
 						<h2 class="text-sm font-semibold text-white">Poster Asli / Teks Mentah</h2>
 					</div>
-					{#if detail.raw.rawImagePayload}
+					{#if posterUrl}
 						<div class="mt-4 overflow-hidden rounded-xl border border-slate-800 bg-slate-950">
-							<img
-								src={detail.raw.rawImagePayload}
-								alt="Poster lowongan {job.jobTitle}"
-								class="mx-auto max-h-[520px] w-auto object-contain"
-							/>
+							<button
+								type="button"
+								onclick={() => (lightboxOpen = true)}
+								class="group relative block w-full cursor-zoom-in"
+								aria-label="Perbesar poster lowongan"
+							>
+								<img
+									src={posterUrl}
+									alt="Poster lowongan {job.jobTitle}"
+									class="mx-auto max-h-[520px] w-auto object-contain transition group-hover:opacity-95"
+								/>
+								<span
+									class="absolute bottom-3 right-3 rounded-full bg-slate-950/85 px-2.5 py-1 text-[10px] font-semibold text-slate-200 ring-1 ring-slate-700"
+								>
+									Klik untuk zoom
+								</span>
+							</button>
 						</div>
 					{:else}
 						<div class="mt-4 rounded-xl border border-slate-800 bg-slate-950 p-4">
@@ -296,7 +318,7 @@
 					</p>
 				</div>
 
-				{#if detail.raw.rawImagePayload && detail.raw.rawContent}
+				{#if posterUrl && detail.raw.rawContent}
 					<details class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
 						<summary class="cursor-pointer text-sm font-semibold text-white">Lihat teks mentah</summary>
 						<pre class="mt-3 whitespace-pre-wrap text-xs leading-6 text-slate-300">{detail.raw.rawContent}</pre>
@@ -339,7 +361,7 @@
 			</section>
 
 			<section class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-				<h2 class="text-sm font-semibold text-white">Hasil Parsing JSON (GPT-4o)</h2>
+				<h2 class="text-sm font-semibold text-white">Hasil Ekstraksi AI (OpenAI)</h2>
 				<p class="mt-1 text-xs text-slate-500">Tinjau dan koreksi data sebelum dipublikasikan.</p>
 
 				<div class="mt-4 space-y-4">
@@ -398,6 +420,10 @@
 						Gaji dirahasiakan
 					</label>
 
+					<div class="border-t border-slate-800 pt-4">
+						<p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Requirements List</p>
+					</div>
+
 					<div class="grid gap-4 sm:grid-cols-3">
 						<label class="block space-y-1.5 text-sm font-medium text-slate-300">
 							Min. Pengalaman (tahun)
@@ -453,7 +479,7 @@
 						class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-700 px-4 text-sm font-semibold text-slate-200 transition hover:bg-slate-800 disabled:opacity-60"
 					>
 						{#if isSaving}<Spinner label="Menyimpan" />{:else}<Save size={15} />{/if}
-						Edit Data
+						Save Changes
 					</button>
 					<button
 						type="button"
@@ -471,7 +497,7 @@
 						class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-rose-500/30 px-4 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/10 disabled:opacity-60"
 					>
 						{#if isDiscarding}<Spinner label="Membuang" />{:else}<Ban size={15} />{/if}
-						Discard
+						Reject / Discard
 					</button>
 				</div>
 
@@ -483,4 +509,37 @@
 			</section>
 		</div>
 	</div>
+
+	{#if lightboxOpen && posterUrl}
+		<div
+			class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 p-4 backdrop-blur-sm"
+			role="dialog"
+			aria-modal="true"
+			aria-label="Pratinjau poster lowongan"
+			tabindex="-1"
+		>
+			<button
+				type="button"
+				class="absolute inset-0 h-full w-full cursor-zoom-out"
+				aria-label="Tutup pratinjau"
+				onclick={() => (lightboxOpen = false)}
+			></button>
+			<img
+				src={posterUrl}
+				alt="Poster lowongan {job.jobTitle}"
+				class="relative z-10 max-h-[90vh] max-w-[92vw] rounded-xl object-contain shadow-2xl"
+			/>
+			<button
+				type="button"
+				onclick={() => (lightboxOpen = false)}
+				class="absolute right-4 top-4 z-20 inline-flex size-10 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-slate-200 transition hover:bg-slate-800"
+				aria-label="Tutup pratinjau"
+			>
+				<X size={20} />
+			</button>
+			<p class="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full bg-slate-950/80 px-3 py-1 text-[11px] text-slate-300 ring-1 ring-slate-700">
+				Klik di luar gambar untuk menutup
+			</p>
+		</div>
+	{/if}
 {/if}

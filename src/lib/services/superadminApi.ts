@@ -15,10 +15,7 @@ export type JobStatus =
 	| 'PUBLISHED'
 	| 'ARCHIVED'
 	| 'REJECTED';
-export type IngestionSourceType =
-	| 'TELEGRAM_CHANNEL'
-	| 'CORPORATE_WEBSITE'
-	| 'MANUAL_INPUT';
+export type IngestionSourceType = 'TELEGRAM_CHANNEL' | 'CORPORATE_WEBSITE';
 export type ApplicationType = 'EMAIL' | 'WEBSITE_PORTAL' | 'WHATSAPP' | 'TELEGRAM';
 export type WorkplaceType = 'REMOTE' | 'WFO' | 'HYBRID';
 export type EmploymentType = 'FULL_TIME' | 'CONTRACT' | 'FREELANCE' | 'INTERNSHIP';
@@ -122,6 +119,7 @@ export interface ScrapedJob {
 	applicationDestination: string;
 	sourceType: IngestionSourceType;
 	sourceDetail: string;
+	localImagePath?: string | null;
 	status: JobStatus;
 	confidenceScore: number | null;
 	scrapedAt: string;
@@ -135,7 +133,7 @@ export interface ScrapedJobDetail {
 	job: ScrapedJob;
 	raw: {
 		rawContent: string | null;
-		rawImagePayload: string | null;
+		localImagePath: string | null;
 		sourceType: IngestionSourceType;
 		sourceDetail: string;
 		scrapedAt: string;
@@ -192,20 +190,6 @@ export interface IngestionSourceInput {
 	type: IngestionSourceType;
 	identifier: string;
 	isActive?: boolean;
-}
-
-export interface IngestSourceInput {
-	rawContent?: string;
-	imageUrl?: string;
-}
-
-export interface IngestSourceResponse {
-	sourceId: string;
-	type: IngestionSourceType;
-	ingested: number;
-	failed: number;
-	jobs: Array<{ id: string; jobTitle: string; companyName: string }>;
-	errors: string[];
 }
 
 export interface AiUsageLog {
@@ -427,10 +411,25 @@ export async function deleteSourceApi(id: string): Promise<{ id: string; deleted
 	return (await response.json()) as { id: string; deleted: boolean };
 }
 
-export async function ingestSourceApi(
-	id: string,
-	input: IngestSourceInput = {}
-): Promise<IngestSourceResponse> {
-	const response = await apiRequest(`superadmin/sources/${id}/ingest`, jsonInit('POST', input));
-	return (await response.json()) as IngestSourceResponse;
+export type TelegramScraperAction = 'START' | 'STOP';
+
+export interface TelegramScraperStatus {
+	enabled: boolean;
+	connected: boolean;
+	startedAt: string | null;
+	lastError: string | null;
+	apiConfigured: boolean;
+	sessionConfigured: boolean;
+}
+
+export async function getTelegramStatusApi(): Promise<TelegramScraperStatus> {
+	const response = await apiRequest('superadmin/telegram/status');
+	return (await response.json()) as TelegramScraperStatus;
+}
+
+export async function toggleTelegramScraperApi(
+	action: TelegramScraperAction
+): Promise<TelegramScraperStatus> {
+	const response = await apiRequest('superadmin/telegram/toggle', jsonInit('POST', { action }));
+	return (await response.json()) as TelegramScraperStatus;
 }
