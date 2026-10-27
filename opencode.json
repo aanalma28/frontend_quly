@@ -1,0 +1,7 @@
+{
+  "ignore": [
+    ".env",    
+    "uploads/**",
+    "node_modules/**"
+  ]
+}

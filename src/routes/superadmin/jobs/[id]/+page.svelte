@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import {
 		ArrowLeft,
+		ArrowRight,
 		Ban,
 		CheckCircle2,
 		Image as ImageIcon,
@@ -24,11 +24,13 @@
 	} from '#lib/components/superadmin/status.js';
 	import {
 		getJobApi,
+		listJobsApi,
 		updateJobApi,
 		updateJobStatusApi,
 		type ApplicationType,
 		type EmploymentType,
 		type JobRequirements,
+		type JobStatus,
 		type ScrapedJob,
 		type ScrapedJobDetail,
 		type UpdateScrapedJobInput,
@@ -46,6 +48,7 @@
 	let loadError = $state<string | null>(null);
 	let errorMessage = $state<string | null>(null);
 	let successMessage = $state<string | null>(null);
+	let infoMessage = $state<string | null>(null);
 
 	let formJobTitle = $state('');
 	let formCompanyName = $state('');
@@ -69,11 +72,13 @@
 	let isSaving = $state(false);
 	let isPublishing = $state(false);
 	let isDiscarding = $state(false);
+	let isFindingNext = $state(false);
 	let lightboxOpen = $state(false);
 
 	const workplaceTypes: WorkplaceType[] = ['REMOTE', 'WFO', 'HYBRID'];
 	const employmentTypes: EmploymentType[] = ['FULL_TIME', 'CONTRACT', 'FREELANCE', 'INTERNSHIP'];
 	const applicationTypes: ApplicationType[] = ['EMAIL', 'WEBSITE_PORTAL', 'WHATSAPP', 'TELEGRAM'];
+	const auditStatuses: JobStatus[] = ['RAW_PARSED', 'PENDING_REVIEW'];
 
 	const inputClass =
 		'w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30';
@@ -107,11 +112,15 @@
 		formConfidence = data.confidenceScore !== null ? String(data.confidenceScore) : '';
 	}
 
-	async function load() {
+	async function load(id: string = jobId) {
 		isLoading = true;
 		loadError = null;
+		errorMessage = null;
+		successMessage = null;
+		infoMessage = null;
+		lightboxOpen = false;
 		try {
-			const data = await getJobApi(jobId);
+			const data = await getJobApi(id);
 			detail = data;
 			job = data.job;
 			applyToForm(data.job);
@@ -189,6 +198,80 @@
 		}
 	}
 
+	async function findFirstPendingJobId(): Promise<string | null> {
+		const pageSize = 100;
+		const maxPages = 10;
+		let page = 1;
+		let totalPages = 1;
+
+		do {
+			const response = await listJobsApi({ page, limit: pageSize });
+			totalPages = response.meta.totalPages;
+			const pending = response.items.find((item) => auditStatuses.includes(item.status));
+			if (pending) return pending.id;
+			page += 1;
+		} while (page <= totalPages && page <= maxPages);
+
+		return null;
+	}
+
+	async function findNextJobId(): Promise<string | null> {
+		if (job && !auditStatuses.includes(job.status)) {
+			return findFirstPendingJobId();
+		}
+
+		const pageSize = 100;
+		const maxPages = 10;
+		let page = 1;
+		let totalPages = 1;
+		let firstPendingId: string | null = null;
+		let foundCurrent = false;
+
+		do {
+			const response = await listJobsApi({ page, limit: pageSize });
+			totalPages = response.meta.totalPages;
+			for (const item of response.items) {
+				if (!auditStatuses.includes(item.status)) continue;
+				if (!firstPendingId) firstPendingId = item.id;
+				if (foundCurrent) return item.id;
+				if (item.id === jobId) foundCurrent = true;
+			}
+			page += 1;
+		} while (page <= totalPages && page <= maxPages);
+
+		return foundCurrent ? null : firstPendingId;
+	}
+
+	async function goToNext() {
+		if (isFindingNext) return;
+		isFindingNext = true;
+		errorMessage = null;
+		successMessage = null;
+		infoMessage = null;
+		try {
+			const nextId = await findNextJobId();
+			if (!nextId) {
+				infoMessage = 'Tidak ada lowongan lain yang menunggu audit.';
+				return;
+			}
+			await goto(`/superadmin/jobs/${nextId}`);
+		} catch (error) {
+			errorMessage =
+				error instanceof Error ? error.message : 'Gagal mencari lowongan berikutnya.';
+		} finally {
+			isFindingNext = false;
+		}
+	}
+
+	async function navigateAfterAction() {
+		try {
+			const nextId = await findFirstPendingJobId();
+			await goto(nextId ? `/superadmin/jobs/${nextId}` : '/superadmin/jobs');
+		} catch {
+			await goto('/superadmin/jobs');
+		}
+	}
+
 	async function approveAndPublish() {
 		if (isPublishing) return;
 		const saved = await saveOnly();
@@ -198,9 +281,13 @@
 		successMessage = null;
 		try {
 			await updateJobStatusApi(jobId, 'PUBLISHED');
-			await goto('/superadmin/jobs');
 		} catch (error) {
 			errorMessage = error instanceof Error ? error.message : 'Publikasi gagal.';
+			isPublishing = false;
+			return;
+		}
+		try {
+			await navigateAfterAction();
 		} finally {
 			isPublishing = false;
 		}
@@ -214,15 +301,20 @@
 		successMessage = null;
 		try {
 			await updateJobStatusApi(jobId, 'REJECTED');
-			await goto('/superadmin/jobs');
 		} catch (error) {
 			errorMessage = error instanceof Error ? error.message : 'Gagal membuang lowongan.';
+			isDiscarding = false;
+			return;
+		}
+		try {
+			await navigateAfterAction();
+		} finally {
 			isDiscarding = false;
 		}
 	}
 
-	onMount(() => {
-		void load();
+	$effect(() => {
+		void load(jobId);
 	});
 </script>
 
@@ -270,6 +362,19 @@
 					<span>· Scraped {formatDate(job.scrapedAt)}</span>
 				</div>
 			</div>
+			<button
+				type="button"
+				onclick={() => void goToNext()}
+				disabled={isSaving || isPublishing || isDiscarding || isFindingNext}
+				class="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 text-sm font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+			>
+				{#if isFindingNext}
+					<Spinner label="Mencari lowongan berikutnya" />
+				{:else}
+					<ArrowRight size={16} />
+				{/if}
+				Next Job
+			</button>
 		</header>
 
 		{#if errorMessage}
@@ -277,6 +382,9 @@
 		{/if}
 		{#if successMessage}
 			<Alert type="success" message={successMessage} dismissible ondismiss={() => (successMessage = null)} />
+		{/if}
+		{#if infoMessage}
+			<Alert type="info" message={infoMessage} dismissible ondismiss={() => (infoMessage = null)} />
 		{/if}
 
 		<div class="grid gap-5 lg:grid-cols-2">
@@ -475,7 +583,7 @@
 					<button
 						type="button"
 						onclick={() => void saveOnly()}
-						disabled={isSaving || isPublishing || isDiscarding}
+						disabled={isSaving || isPublishing || isDiscarding || isFindingNext}
 						class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-700 px-4 text-sm font-semibold text-slate-200 transition hover:bg-slate-800 disabled:opacity-60"
 					>
 						{#if isSaving}<Spinner label="Menyimpan" />{:else}<Save size={15} />{/if}
@@ -484,7 +592,7 @@
 					<button
 						type="button"
 						onclick={() => void approveAndPublish()}
-						disabled={isSaving || isPublishing || isDiscarding}
+						disabled={isSaving || isPublishing || isDiscarding || isFindingNext}
 						class="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:opacity-60"
 					>
 						{#if isPublishing}<Spinner label="Mempublikasikan" />{:else}<Send size={15} />{/if}
@@ -493,11 +601,24 @@
 					<button
 						type="button"
 						onclick={() => void discard()}
-						disabled={isSaving || isPublishing || isDiscarding}
+						disabled={isSaving || isPublishing || isDiscarding || isFindingNext}
 						class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-rose-500/30 px-4 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/10 disabled:opacity-60"
 					>
 						{#if isDiscarding}<Spinner label="Membuang" />{:else}<Ban size={15} />{/if}
 						Reject / Discard
+					</button>
+					<button
+						type="button"
+						onclick={() => void goToNext()}
+						disabled={isSaving || isPublishing || isDiscarding || isFindingNext}
+						class="ml-auto inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-4 text-sm font-semibold text-indigo-200 transition hover:bg-indigo-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+					>
+						{#if isFindingNext}
+							<Spinner label="Mencari lowongan berikutnya" />
+						{:else}
+							<ArrowRight size={15} />
+						{/if}
+						Next Job
 					</button>
 				</div>
 
