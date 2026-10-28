@@ -15,6 +15,8 @@
 	import { formatDate, formatNumber, formatUsd } from '#lib/components/superadmin/format.js';
 	import { getAssetUrl } from '#lib/utils/api.js';
 	import {
+		aiOutcomeLabel,
+		aiOutcomeTone,
 		applicationTypeLabel,
 		employmentTypeLabel,
 		jobStatusLabel,
@@ -465,6 +467,7 @@
 									<tr>
 										<th class="pb-2 pr-3 font-semibold">Fitur</th>
 										<th class="pb-2 pr-3 font-semibold">Model</th>
+										<th class="pb-2 pr-3 font-semibold">Outcome</th>
 										<th class="pb-2 pr-3 font-semibold">Tokens</th>
 										<th class="pb-2 pr-3 font-semibold">Biaya</th>
 										<th class="pb-2 font-semibold">Waktu</th>
@@ -475,6 +478,19 @@
 										<tr>
 											<td class="py-2 pr-3 text-slate-300">{log.featureName}</td>
 											<td class="py-2 pr-3 text-slate-400">{log.modelName}</td>
+											<td class="py-2 pr-3">
+												<span class="rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset {aiOutcomeTone(log.outcome)}">
+													{aiOutcomeLabel(log.outcome)}
+												</span>
+												{#if log.errorMessage}
+													<p
+														class="mt-1 max-w-[180px] truncate text-[10px] text-rose-300/80"
+														title={log.errorMessage}
+													>
+														{log.errorMessage}
+													</p>
+												{/if}
+											</td>
 											<td class="py-2 pr-3 text-slate-300">
 												{formatNumber(log.promptTokens + log.completionTokens)}
 											</td>

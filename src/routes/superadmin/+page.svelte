@@ -24,9 +24,11 @@
 		tierTone
 	} from '#lib/components/superadmin/status.js';
 	import {
+		getAiCostsApi,
 		getOverviewApi,
 		listJobsApi,
 		listPackagesApi,
+		type AiCostsResponse,
 		type OverviewResponse,
 		type ScrapedJob,
 		type SubscriptionPackage
@@ -35,6 +37,7 @@
 	let overview = $state<OverviewResponse | null>(null);
 	let jobs = $state<ScrapedJob[]>([]);
 	let packages = $state<SubscriptionPackage[]>([]);
+	let aiCosts = $state<AiCostsResponse | null>(null);
 	let isLoading = $state(true);
 	let loadError = $state<string | null>(null);
 
@@ -42,14 +45,16 @@
 		isLoading = true;
 		loadError = null;
 		try {
-			const [overviewData, jobList, packageList] = await Promise.all([
+			const [overviewData, jobList, packageList, aiCostData] = await Promise.all([
 				getOverviewApi(),
 				listJobsApi({ limit: 5 }),
-				listPackagesApi()
+				listPackagesApi(),
+				getAiCostsApi().catch(() => null)
 			]);
 			overview = overviewData;
 			jobs = jobList.items ?? [];
 			packages = packageList;
+			aiCosts = aiCostData;
 		} catch (error) {
 			loadError = error instanceof Error ? error.message : 'Data cockpit belum dapat dimuat.';
 		} finally {
@@ -62,6 +67,13 @@
 	});
 
 	const publishedJobs = $derived(overview?.jobs.byStatus?.PUBLISHED ?? 0);
+	const aiSuccessRate = $derived(
+		aiCosts && aiCosts.totals.requests > 0
+			? ((aiCosts.byOutcome?.find((item) => item.outcome === 'SUCCESS')?.requests ?? 0) /
+					aiCosts.totals.requests) *
+					100
+			: null
+	);
 	const costShare = $derived(
 		overview && overview.revenue.totalIdr > 0
 			? (overview.ai.totalCostIdr / overview.revenue.totalIdr) * 100
@@ -133,7 +145,9 @@
 			<KpiCard
 				label="OpenAI Token Cost"
 				value={formatUsd(overview.ai.totalCostUsd)}
-				hint={`≈ ${formatRupiah(overview.ai.totalCostIdr)}`}
+				hint={aiSuccessRate !== null
+					? `≈ ${formatRupiah(overview.ai.totalCostIdr)} · ${aiSuccessRate.toFixed(1)}% sukses`
+					: `≈ ${formatRupiah(overview.ai.totalCostIdr)}`}
 				icon={Bot}
 				tone="violet"
 			/>

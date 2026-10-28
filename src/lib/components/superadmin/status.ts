@@ -81,3 +81,20 @@ export const employmentTypeLabel: Record<EmploymentType, string> = {
 	FREELANCE: 'Freelance',
 	INTERNSHIP: 'Internship'
 };
+
+/** Human-readable label for an OpenAI usage `outcome`. */
+export function aiOutcomeLabel(outcome: string): string {
+	if (outcome === 'SUCCESS') return 'Success';
+	if (outcome === 'INVALID_RESPONSE') return 'Invalid Response';
+	return outcome
+		.split('_')
+		.map((part) => part.charAt(0) + part.slice(1).toLowerCase())
+		.join(' ');
+}
+
+/** Badge tone for an OpenAI usage `outcome`. */
+export function aiOutcomeTone(outcome: string): string {
+	return outcome === 'SUCCESS'
+		? 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20'
+		: 'bg-rose-500/10 text-rose-300 ring-rose-500/20';
+}

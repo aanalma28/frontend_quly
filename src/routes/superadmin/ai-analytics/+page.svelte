@@ -1,10 +1,19 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { Activity, Bot, CircleDollarSign, Cpu, RefreshCw } from '@lucide/svelte';
+	import {
+		Activity,
+		AlertCircle,
+		Bot,
+		CheckCircle2,
+		CircleDollarSign,
+		Cpu,
+		RefreshCw
+	} from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import BarChart from '#lib/components/superadmin/BarChart.svelte';
 	import DonutChart from '#lib/components/superadmin/DonutChart.svelte';
 	import KpiCard from '#lib/components/superadmin/KpiCard.svelte';
+	import { aiOutcomeLabel, aiOutcomeTone } from '#lib/components/superadmin/status.js';
 	import { formatCompact, formatNumber, formatRupiah, formatUsd } from '#lib/components/superadmin/format.js';
 	import {
 		getAiCostsApi,
@@ -105,6 +114,42 @@
 	const featureValues = $derived(
 		data ? data.byFeature.map((feature) => featureTokens(feature)) : []
 	);
+
+	const outcomeRows = $derived(data?.byOutcome ?? []);
+	const successOutcome = $derived(
+		outcomeRows.find((item) => item.outcome === 'SUCCESS') ?? null
+	);
+	const invalidOutcome = $derived(
+		outcomeRows.find((item) => item.outcome === 'INVALID_RESPONSE') ?? null
+	);
+	const successRate = $derived(
+		data && data.totals.requests > 0
+			? ((successOutcome?.requests ?? 0) / data.totals.requests) * 100
+			: 0
+	);
+	const invalidShare = $derived(
+		data && data.totals.requests > 0
+			? ((invalidOutcome?.requests ?? 0) / data.totals.requests) * 100
+			: 0
+	);
+	const invalidCostUsd = $derived(invalidOutcome?.estimatedCostUsd ?? 0);
+	const invalidCostShare = $derived(
+		data && data.totals.estimatedCostUsd > 0
+			? (invalidCostUsd / data.totals.estimatedCostUsd) * 100
+			: 0
+	);
+	const outcomeSegments = $derived(
+		outcomeRows.map((item, index) => ({
+			label: aiOutcomeLabel(item.outcome),
+			value: item.requests,
+			color:
+				item.outcome === 'SUCCESS'
+					? '#10b981'
+					: item.outcome === 'INVALID_RESPONSE'
+						? '#f43f5e'
+						: palette[index % palette.length]
+		}))
+	);
 </script>
 
 <svelte:head>
@@ -117,7 +162,7 @@
 			<p class="text-sm font-semibold text-amber-300">Unit Economics</p>
 			<h1 class="mt-1 text-2xl font-bold tracking-tight text-white">OpenAI Cost &amp; Economics</h1>
 			<p class="mt-2 text-sm text-slate-400">
-				Breakdown biaya token per fitur dari log penggunaan OpenAI.
+				Breakdown biaya token per fitur serta rasio keberhasilan pemrosesan AI.
 			</p>
 		</div>
 		<button
@@ -217,6 +262,30 @@
 				</p>
 			</div>
 		{:else}
+			<section class="grid gap-4 sm:grid-cols-3">
+				<KpiCard
+					label="Success Rate"
+					value={`${successRate.toFixed(1)}%`}
+					hint={`${formatNumber(successOutcome?.requests ?? 0)} dari ${formatNumber(data.totals.requests)} request`}
+					icon={CheckCircle2}
+					tone="emerald"
+				/>
+				<KpiCard
+					label="Invalid Responses"
+					value={formatNumber(invalidOutcome?.requests ?? 0)}
+					hint={`${invalidShare.toFixed(1)}% dari total request`}
+					icon={AlertCircle}
+					tone="rose"
+				/>
+				<KpiCard
+					label="Biaya Invalid"
+					value={formatUsd(invalidCostUsd)}
+					hint={`≈ ${formatRupiah(invalidCostUsd * idrPerUsd)} · ${invalidCostShare.toFixed(1)}% dari total biaya`}
+					icon={CircleDollarSign}
+					tone="amber"
+				/>
+			</section>
+
 			<section class="grid gap-3 md:grid-cols-3">
 				{#each data.byFeature as feature, index (feature.featureName)}
 					<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
@@ -261,6 +330,68 @@
 							valueFormatter={(value) => formatCompact(value)}
 						/>
 					</div>
+				</div>
+			</section>
+
+			<section class="grid gap-4 lg:grid-cols-3">
+				<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
+					<h2 class="text-sm font-semibold text-white">Outcome Requests</h2>
+					<p class="mt-1 text-xs text-slate-500">
+						Distribusi request berdasarkan hasil pemrosesan AI.
+					</p>
+					<div class="mt-5 flex justify-center">
+						<DonutChart
+							segments={outcomeSegments}
+							centerValue={formatNumber(data.totals.requests)}
+							centerLabel="Requests"
+						/>
+					</div>
+				</div>
+
+				<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 lg:col-span-2">
+					<h2 class="text-sm font-semibold text-white">Outcome Breakdown</h2>
+					<p class="mt-1 text-xs text-slate-500">
+						Perbandingan request sukses dan respons yang gagal divalidasi.
+					</p>
+					<div class="mt-4 overflow-x-auto">
+						<table class="min-w-full divide-y divide-slate-800 text-sm">
+							<thead class="bg-slate-900 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+								<tr>
+									<th class="px-4 py-2">Outcome</th>
+									<th class="px-4 py-2">Requests</th>
+									<th class="px-4 py-2">Share</th>
+									<th class="px-4 py-2">Tokens</th>
+									<th class="px-4 py-2">Biaya</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-slate-800/70">
+								{#each outcomeRows as outcome (outcome.outcome)}
+									<tr class="hover:bg-slate-900">
+										<td class="px-4 py-3">
+											<span class="rounded-full px-2.5 py-0.5 text-[10px] font-semibold ring-1 ring-inset {aiOutcomeTone(outcome.outcome)}">
+												{aiOutcomeLabel(outcome.outcome)}
+											</span>
+										</td>
+										<td class="px-4 py-3 text-slate-300">{formatNumber(outcome.requests)}</td>
+										<td class="px-4 py-3 text-slate-300">
+											{data.totals.requests > 0
+												? ((outcome.requests / data.totals.requests) * 100).toFixed(1)
+												: '0.0'}%
+										</td>
+										<td class="px-4 py-3 text-slate-300">{formatCompact(featureTokens(outcome))}</td>
+										<td class="px-4 py-3 font-semibold text-slate-200">
+											{formatUsd(outcome.estimatedCostUsd)}
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+					<p class="mt-3 text-[11px] leading-5 text-slate-500">
+						“Invalid Response” berarti JSON kosong/tidak valid/tidak lolos skema. Pesan error detail
+						per request ada di halaman audit lowongan (AI Usage Log). Kegagalan koneksi/API tidak
+						memiliki usage token sehingga tidak tercatat di sini.
+					</p>
 				</div>
 			</section>
 

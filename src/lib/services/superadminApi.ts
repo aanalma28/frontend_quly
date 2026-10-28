@@ -207,6 +207,8 @@ export interface AiUsageLog {
 	promptTokens: number;
 	completionTokens: number;
 	estimatedCostUsd: number;
+	outcome: string;
+	errorMessage: string | null;
 	scrapedJobId: string | null;
 	createdAt: string;
 }
@@ -258,6 +260,14 @@ export interface AiCostByFeature {
 	estimatedCostUsd: number;
 }
 
+export interface AiCostByOutcome {
+	outcome: string;
+	requests: number;
+	promptTokens: number;
+	completionTokens: number;
+	estimatedCostUsd: number;
+}
+
 export interface AiCostsQuery {
 	from?: string;
 	to?: string;
@@ -266,6 +276,7 @@ export interface AiCostsQuery {
 export interface AiCostsResponse {
 	items: AiCostItem[];
 	byFeature: AiCostByFeature[];
+	byOutcome: AiCostByOutcome[];
 	totals: {
 		requests: number;
 		promptTokens: number;
