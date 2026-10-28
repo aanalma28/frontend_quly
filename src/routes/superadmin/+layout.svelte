@@ -6,6 +6,7 @@
 	import {
 		Bot,
 		Boxes,
+		ChartColumn,
 		Crown,
 		LayoutDashboard,
 		LogOut,
@@ -22,6 +23,7 @@
 	const navigation = [
 		{ label: 'Executive Overview', href: '/superadmin', icon: LayoutDashboard, exact: true },
 		{ label: 'Live Job Ingestion & Audit', href: '/superadmin/jobs', icon: Rss },
+		{ label: 'Job Statistics', href: '/superadmin/job-statistics', icon: ChartColumn },
 		{ label: 'Ingestion Sources (Telegram Channels)', href: '/superadmin/sources', icon: Plug },
 		{ label: 'Subscription Packages', href: '/superadmin/packages', icon: Boxes },
 		{ label: 'AI Cost & Token Analytics', href: '/superadmin/ai-analytics', icon: Bot }

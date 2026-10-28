@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { page as appPage } from '$app/state';
 	import { ArrowRight, Eye, RefreshCw, Rss, Search } from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import Alert from '#lib/components/superadmin/Alert.svelte';
@@ -18,17 +20,6 @@
 		type ScrapedJob
 	} from '#lib/services/superadminApi.js';
 
-	let items = $state<ScrapedJob[]>([]);
-	let meta = $state<PaginationMeta | null>(null);
-	let isLoading = $state(true);
-	let loadError = $state<string | null>(null);
-
-	let statusFilter = $state<JobStatus | 'ALL'>('ALL');
-	let sourceTypeFilter = $state<IngestionSourceType | 'ALL'>('ALL');
-	let searchInput = $state('');
-	let appliedSearch = $state('');
-	let page = $state(1);
-
 	const statuses: Array<JobStatus | 'ALL'> = [
 		'ALL',
 		'RAW_PARSED',
@@ -45,6 +36,27 @@
 		'CORPORATE_WEBSITE'
 	];
 
+	const initialStatus = appPage.url.searchParams.get('status');
+	const initialSourceId = appPage.url.searchParams.get('sourceId') ?? '';
+	const initialSourceName = appPage.url.searchParams.get('sourceName') ?? '';
+
+	let items = $state<ScrapedJob[]>([]);
+	let meta = $state<PaginationMeta | null>(null);
+	let isLoading = $state(true);
+	let loadError = $state<string | null>(null);
+
+	let statusFilter = $state<JobStatus | 'ALL'>(
+		initialStatus && statuses.includes(initialStatus as JobStatus)
+			? (initialStatus as JobStatus)
+			: 'ALL'
+	);
+	let sourceTypeFilter = $state<IngestionSourceType | 'ALL'>('ALL');
+	let sourceIdFilter = $state(initialSourceId);
+	let sourceNameFilter = $state(initialSourceName);
+	let searchInput = $state('');
+	let appliedSearch = $state('');
+	let page = $state(1);
+
 	async function load() {
 		isLoading = true;
 		loadError = null;
@@ -52,6 +64,7 @@
 			const response = await listJobsApi({
 				status: statusFilter === 'ALL' ? undefined : statusFilter,
 				sourceType: sourceTypeFilter === 'ALL' ? undefined : sourceTypeFilter,
+				sourceId: sourceIdFilter || undefined,
 				page,
 				limit: 20,
 				search: appliedSearch || undefined
@@ -80,6 +93,17 @@
 	function changeSourceType(value: string) {
 		sourceTypeFilter = value as IngestionSourceType | 'ALL';
 		page = 1;
+		void load();
+	}
+
+	function clearSourceFilter() {
+		const params = new URLSearchParams();
+		if (statusFilter !== 'ALL') params.set('status', statusFilter);
+		const query = params.toString();
+		sourceIdFilter = '';
+		sourceNameFilter = '';
+		page = 1;
+		void goto(`/superadmin/jobs${query ? `?${query}` : ''}`, { replaceState: true });
 		void load();
 	}
 
@@ -119,6 +143,24 @@
 			Kontrol Scraper <ArrowRight size={16} />
 		</a>
 	</header>
+
+	{#if sourceIdFilter}
+		<div
+			class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-3"
+		>
+			<p class="text-xs font-medium text-indigo-200">
+				Filter grup:
+				<span class="font-semibold text-white">{sourceNameFilter || sourceIdFilter}</span>
+			</p>
+			<button
+				type="button"
+				onclick={clearSourceFilter}
+				class="rounded-lg border border-indigo-400/30 px-2.5 py-1.5 text-xs font-semibold text-indigo-100 transition hover:bg-indigo-500/20"
+			>
+				Hapus filter grup
+			</button>
+		</div>
+	{/if}
 
 	<div class="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
 		<div class="flex flex-wrap items-center justify-between gap-3">
@@ -222,7 +264,9 @@
 									<span class="inline-flex items-center gap-1.5 rounded-md border border-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
 										{sourceTypeLabel[job.sourceType]}
 									</span>
-									<p class="mt-1 text-[11px] text-slate-500">{job.sourceDetail}</p>
+									<p class="mt-1 text-[11px] text-slate-500">
+										{job.source?.name ?? job.sourceDetail}
+									</p>
 								</td>
 								<td class="px-5 py-4 text-xs text-slate-300">{applicationTypeLabel[job.applicationType]}</td>
 								<td class="px-5 py-4">

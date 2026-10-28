@@ -19,6 +19,11 @@ export function formatNumber(value: number): string {
 	return new Intl.NumberFormat('id-ID').format(value);
 }
 
+/** Format a 0..1 ratio as a percentage. */
+export function formatPercent(value: number, digits = 1): string {
+	return `${(value * 100).toFixed(digits)}%`;
+}
+
 export function formatCompact(value: number): string {
 	const abs = Math.abs(value);
 	if (abs >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`;

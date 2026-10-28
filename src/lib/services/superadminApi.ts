@@ -121,6 +121,13 @@ export interface ScrapedJob {
 	applicationDestination: string;
 	sourceType: IngestionSourceType;
 	sourceDetail: string;
+	sourceId?: string | null;
+	source?: {
+		id: string;
+		name: string;
+		identifier: string;
+		type: IngestionSourceType;
+	} | null;
 	localImagePath?: string | null;
 	status: JobStatus;
 	confidenceScore: number | null;
@@ -146,6 +153,7 @@ export interface ScrapedJobDetail {
 export interface ScrapedJobsQuery {
 	status?: JobStatus;
 	sourceType?: IngestionSourceType;
+	sourceId?: string;
 	page?: number;
 	limit?: number;
 	search?: string;
@@ -289,6 +297,82 @@ export interface AiCostsResponse {
 	};
 }
 
+export interface JobStatusCounts {
+	RAW_PARSED: number;
+	PENDING_REVIEW: number;
+	APPROVED: number;
+	SAVED: number;
+	PUBLISHED: number;
+	ARCHIVED: number;
+	REJECTED: number;
+}
+
+export interface ApplicationMethods {
+	EMAIL: number;
+	WEBSITE_PORTAL: number;
+	WHATSAPP: number;
+	TELEGRAM: number;
+	emailShare: number;
+}
+
+export interface ApplicationStatusCounts {
+	PENDING: number;
+	SENT: number;
+	REPLIED: number;
+	FAILED: number;
+}
+
+export interface ApplicationChargeCounts {
+	MONTHLY_QUOTA: number;
+	PAYG: number;
+}
+
+export interface JobStatisticsSource {
+	sourceId: string;
+	name: string;
+	identifier: string;
+	type: IngestionSourceType;
+	isActive: boolean;
+	lastScrapedAt: string | null;
+	statusMessage: string | null;
+	jobs: {
+		total: number;
+		byStatus: JobStatusCounts;
+		applicationMethods: ApplicationMethods;
+		lastJobAt: string | null;
+	};
+}
+
+export interface JobStatisticsResponse {
+	range: { from: string | null; to: string | null };
+	jobs: {
+		total: number;
+		byStatus: JobStatusCounts;
+		applicationMethods: ApplicationMethods;
+	};
+	sources: JobStatisticsSource[];
+	unattributedJobs: {
+		total: number;
+		byStatus: JobStatusCounts;
+		applicationMethods: ApplicationMethods;
+	};
+	applications: {
+		total: number;
+		byStatus: ApplicationStatusCounts;
+		byChargeType: ApplicationChargeCounts;
+		sent: number;
+		replied: number;
+		failed: number;
+		deliveryRate: number;
+		deliveryChannel: string;
+	};
+}
+
+export interface JobStatisticsQuery {
+	from?: string;
+	to?: string;
+}
+
 function toQuery(params: Record<string, string | number | undefined>): string {
 	const search = new URLSearchParams();
 	for (const [key, value] of Object.entries(params)) {
@@ -314,6 +398,15 @@ export async function getAiCostsApi(query: AiCostsQuery = {}): Promise<AiCostsRe
 		`superadmin/analytics/ai-costs${toQuery({ from: query.from, to: query.to })}`
 	);
 	return (await response.json()) as AiCostsResponse;
+}
+
+export async function getJobStatisticsApi(
+	query: JobStatisticsQuery = {}
+): Promise<JobStatisticsResponse> {
+	const response = await apiRequest(
+		`superadmin/analytics/jobs${toQuery({ from: query.from, to: query.to })}`
+	);
+	return (await response.json()) as JobStatisticsResponse;
 }
 
 export async function listPackagesApi(): Promise<SubscriptionPackage[]> {
@@ -379,6 +472,7 @@ export async function listJobsApi(query: ScrapedJobsQuery = {}): Promise<Scraped
 		`superadmin/jobs${toQuery({
 			status: query.status,
 			sourceType: query.sourceType,
+			sourceId: query.sourceId,
 			page: query.page,
 			limit: query.limit,
 			search: query.search

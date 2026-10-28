@@ -138,33 +138,52 @@
 		}
 	}
 
+	function textValue(value: unknown): string {
+		if (typeof value === 'string') return value;
+		if (value === null || value === undefined) return '';
+		return String(value);
+	}
+
+	function nullableNumber(value: unknown): number | null {
+		const raw = textValue(value).trim();
+		if (!raw) return null;
+		const parsed = Number(raw);
+		return Number.isFinite(parsed) ? parsed : null;
+	}
+
 	function buildPayload(): UpdateScrapedJobInput {
+		const minExperienceYears = nullableNumber(formMinExperience);
+		const salaryMin = nullableNumber(formSalaryMin);
+		const salaryMax = nullableNumber(formSalaryMax);
+		const confidenceScore = nullableNumber(formConfidence);
+		const expiresAt = textValue(formExpiresAt).trim();
+
 		const requirements: JobRequirements = {
-			minExperienceYears: formMinExperience.trim() ? Number(formMinExperience) : null,
-			education: formEducation.trim() || null,
-			skills: formSkills
+			minExperienceYears,
+			education: textValue(formEducation).trim() || null,
+			skills: textValue(formSkills)
 				.split(',')
 				.map((skill) => skill.trim())
 				.filter(Boolean)
 		};
 
 		return {
-			jobTitle: formJobTitle.trim(),
-			companyName: formCompanyName.trim(),
-			location: formLocation.trim(),
+			jobTitle: textValue(formJobTitle).trim(),
+			companyName: textValue(formCompanyName).trim(),
+			location: textValue(formLocation).trim(),
 			workplaceType: formWorkplaceType,
 			employmentType: formEmploymentType,
-			salaryMin: formSalaryMin.trim() ? Number(formSalaryMin) : null,
-			salaryMax: formSalaryMax.trim() ? Number(formSalaryMax) : null,
-			salaryCurrency: formSalaryCurrency.trim() || null,
+			salaryMin,
+			salaryMax,
+			salaryCurrency: textValue(formSalaryCurrency).trim() || null,
 			isSalaryConfidential: formSalaryConfidential,
 			requirements,
-			jobDescriptionSummary: formDescription.trim(),
+			jobDescriptionSummary: textValue(formDescription).trim(),
 			applicationType: formApplicationType,
-			applicationDestination: formApplicationDestination.trim(),
-			applicationInstructions: formApplicationInstructions.trim() || null,
-			expiresAt: formExpiresAt ? new Date(`${formExpiresAt}T23:59:59`).toISOString() : null,
-			confidenceScore: formConfidence.trim() ? Number(formConfidence) : null
+			applicationDestination: textValue(formApplicationDestination).trim(),
+			applicationInstructions: textValue(formApplicationInstructions).trim() || null,
+			expiresAt: expiresAt ? new Date(`${expiresAt}T23:59:59`).toISOString() : null,
+			confidenceScore
 		};
 	}
 
@@ -380,7 +399,7 @@
 					<span class="rounded-full px-2.5 py-1 text-[10px] font-semibold ring-1 ring-inset {jobStatusTone[job.status]}">
 						{jobStatusLabel[job.status]}
 					</span>
-					<span>{sourceTypeLabel[job.sourceType]} · {job.sourceDetail}</span>
+					<span>{sourceTypeLabel[job.sourceType]} · {job.source?.name ?? job.sourceDetail}</span>
 					<span>· Confidence {job.confidenceScore !== null ? `${Math.round(job.confidenceScore * 100)}%` : '—'}</span>
 					<span>· Scraped {formatDate(job.scrapedAt)}</span>
 				</div>
