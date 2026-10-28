@@ -35,6 +35,8 @@ export const subscriptionStatusTone: Record<SubStatus, string> = {
 export const jobStatusLabel: Record<JobStatus, string> = {
 	RAW_PARSED: 'Raw Parsed',
 	PENDING_REVIEW: 'Pending Review',
+	APPROVED: 'Approved',
+	SAVED: 'Saved',
 	PUBLISHED: 'Published',
 	ARCHIVED: 'Archived',
 	REJECTED: 'Rejected'
@@ -43,6 +45,8 @@ export const jobStatusLabel: Record<JobStatus, string> = {
 export const jobStatusTone: Record<JobStatus, string> = {
 	RAW_PARSED: 'bg-slate-500/10 text-slate-300 ring-slate-500/20',
 	PENDING_REVIEW: 'bg-amber-500/10 text-amber-300 ring-amber-500/20',
+	APPROVED: 'bg-teal-500/10 text-teal-300 ring-teal-500/20',
+	SAVED: 'bg-indigo-500/10 text-indigo-300 ring-indigo-500/20',
 	PUBLISHED: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20',
 	ARCHIVED: 'bg-sky-500/10 text-sky-300 ring-sky-500/20',
 	REJECTED: 'bg-rose-500/10 text-rose-300 ring-rose-500/20'

@@ -25,8 +25,8 @@
 	import {
 		getJobApi,
 		listJobsApi,
+		reviewJobApi,
 		updateJobApi,
-		updateJobStatusApi,
 		type ApplicationType,
 		type EmploymentType,
 		type JobRequirements,
@@ -78,7 +78,12 @@
 	const workplaceTypes: WorkplaceType[] = ['REMOTE', 'WFO', 'HYBRID'];
 	const employmentTypes: EmploymentType[] = ['FULL_TIME', 'CONTRACT', 'FREELANCE', 'INTERNSHIP'];
 	const applicationTypes: ApplicationType[] = ['EMAIL', 'WEBSITE_PORTAL', 'WHATSAPP', 'TELEGRAM'];
-	const auditStatuses: JobStatus[] = ['RAW_PARSED', 'PENDING_REVIEW'];
+	const auditStatuses: JobStatus[] = [
+		'RAW_PARSED',
+		'PENDING_REVIEW',
+		'APPROVED',
+		'SAVED'
+	];
 
 	const inputClass =
 		'w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30';
@@ -182,13 +187,22 @@
 			errorMessage = problem;
 			return false;
 		}
+
+		// Jobs still in the audit queue are marked SAVED. Jobs that are already
+		// PUBLISHED/ARCHIVED/REJECTED keep their status while edits are saved.
+		const markSaved = Boolean(job && auditStatuses.includes(job.status));
+
 		isSaving = true;
 		errorMessage = null;
 		successMessage = null;
 		try {
-			const updated = await updateJobApi(jobId, payload);
+			const updated = markSaved
+				? await reviewJobApi(jobId, { status: 'SAVED', data: payload })
+				: await updateJobApi(jobId, payload);
 			job = job ? { ...job, ...updated } : updated;
-			successMessage = 'Perubahan data lowongan berhasil disimpan.';
+			successMessage = markSaved
+				? 'Perubahan disimpan dan lowongan ditandai sebagai SAVED.'
+				: 'Perubahan data lowongan berhasil disimpan.';
 			return true;
 		} catch (error) {
 			errorMessage = error instanceof Error ? error.message : 'Perubahan gagal disimpan.';
@@ -274,13 +288,20 @@
 
 	async function approveAndPublish() {
 		if (isPublishing) return;
-		const saved = await saveOnly();
-		if (!saved) return;
+		const payload = buildPayload();
+		const problem = validate(payload);
+		if (problem) {
+			errorMessage = problem;
+			return;
+		}
+
 		isPublishing = true;
 		errorMessage = null;
 		successMessage = null;
 		try {
-			await updateJobStatusApi(jobId, 'PUBLISHED');
+			// One atomic call: apply edits and publish.
+			const updated = await reviewJobApi(jobId, { status: 'PUBLISHED', data: payload });
+			job = job ? { ...job, ...updated } : updated;
 		} catch (error) {
 			errorMessage = error instanceof Error ? error.message : 'Publikasi gagal.';
 			isPublishing = false;
@@ -300,7 +321,7 @@
 		errorMessage = null;
 		successMessage = null;
 		try {
-			await updateJobStatusApi(jobId, 'REJECTED');
+			await reviewJobApi(jobId, { status: 'REJECTED' });
 		} catch (error) {
 			errorMessage = error instanceof Error ? error.message : 'Gagal membuang lowongan.';
 			isDiscarding = false;

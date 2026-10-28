@@ -12,6 +12,8 @@ export type SubStatus = 'ACTIVE' | 'EXPIRED' | 'CANCELLED';
 export type JobStatus =
 	| 'RAW_PARSED'
 	| 'PENDING_REVIEW'
+	| 'APPROVED'
+	| 'SAVED'
 	| 'PUBLISHED'
 	| 'ARCHIVED'
 	| 'REJECTED';
@@ -171,6 +173,11 @@ export interface UpdateScrapedJobInput {
 	applicationInstructions?: string | null;
 	expiresAt?: string | null;
 	confidenceScore?: number | null;
+}
+
+export interface ReviewScrapedJobInput {
+	status: JobStatus;
+	data?: UpdateScrapedJobInput;
 }
 
 export interface IngestionSource {
@@ -387,6 +394,18 @@ export async function updateJobStatusApi(id: string, status: JobStatus): Promise
 		`superadmin/jobs/${id}/status`,
 		jsonInit('PATCH', { status })
 	);
+	return (await response.json()) as ScrapedJob;
+}
+
+/**
+ * One-shot audit action: update status and optional edits atomically.
+ * Backend route: PATCH /api/superadmin/jobs/:id/review
+ */
+export async function reviewJobApi(
+	id: string,
+	input: ReviewScrapedJobInput
+): Promise<ScrapedJob> {
+	const response = await apiRequest(`superadmin/jobs/${id}/review`, jsonInit('PATCH', input));
 	return (await response.json()) as ScrapedJob;
 }
 

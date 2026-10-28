@@ -33,6 +33,8 @@
 		'ALL',
 		'RAW_PARSED',
 		'PENDING_REVIEW',
+		'APPROVED',
+		'SAVED',
 		'PUBLISHED',
 		'ARCHIVED',
 		'REJECTED'

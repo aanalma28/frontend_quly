@@ -217,7 +217,7 @@
 						{#each jobStatusEntries as [status, count] (status)}
 							<li>
 								<div class="flex items-center justify-between text-xs">
-									<span class="text-slate-400">{status}</span>
+									<span class="text-slate-400">{jobStatusLabel[status as keyof typeof jobStatusLabel] ?? status}</span>
 									<span class="font-semibold text-white">{formatNumber(count)}</span>
 								</div>
 								<div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-800">
