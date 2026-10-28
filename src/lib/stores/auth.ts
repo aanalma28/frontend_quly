@@ -1,15 +1,19 @@
 import { goto } from '$app/navigation';
 import { writable } from 'svelte/store';
-import { ApiError, apiRequest, getApiUrl } from '#lib/utils/api.js';
+import {
+	ACCESS_TOKEN_KEY,
+	ApiError,
+	REFRESH_TOKEN_KEY,
+	apiRequest,
+	getApiUrl,
+	resetSessionExpiredNotice
+} from '#lib/utils/api.js';
 import {
 	EmailAuthFlow,
 	googleOAuthUrl,
 	normalizeEmail,
 	type RegisterEmailDetails
 } from '#lib/utils/email-auth.js';
-
-const ACCESS_TOKEN_KEY = 'auth_access_token';
-const REFRESH_TOKEN_KEY = 'auth_refresh_token';
 
 export interface AuthUser {
 	id: string;
@@ -41,6 +45,20 @@ export const auth = writable<AuthState>({
 	isLoading: true,
 	error: null
 });
+
+// Keep the in-memory token in sync when apiRequest silently refreshes it.
+if (typeof window !== 'undefined') {
+	window.addEventListener('auth:tokens-refreshed', (event) => {
+		const detail = (event as CustomEvent<{ accessToken?: string }>).detail;
+		const accessToken = detail?.accessToken;
+		if (typeof accessToken !== 'string') return;
+		auth.update((state) => ({
+			...state,
+			token: accessToken,
+			isAuthenticated: true
+		}));
+	});
+}
 
 let initialization: Promise<boolean> | null = null;
 const emailAuthFlow = new EmailAuthFlow(apiRequest);
@@ -168,6 +186,7 @@ export function saveAuthTokens(accessToken: string, refreshToken: string | null)
 	localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
 	if (refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
 	else localStorage.removeItem(REFRESH_TOKEN_KEY);
+	resetSessionExpiredNotice();
 	auth.update((state) => ({
 		...state,
 		isAuthenticated: true,
@@ -307,7 +326,21 @@ export async function initializeAuth(): Promise<boolean> {
 }
 
 export async function logout(): Promise<void> {
+	const refreshToken =
+		typeof localStorage !== 'undefined' ? localStorage.getItem(REFRESH_TOKEN_KEY) : null;
 	clearSession();
+	if (refreshToken) {
+		try {
+			await apiRequest('auth/logout', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ refreshToken }),
+				signal: AbortSignal.timeout(3000)
+			});
+		} catch {
+			// Revoking the backend session is best-effort; local session is already cleared.
+		}
+	}
 	await goto('/auth/login', { invalidateAll: true });
 }
 
