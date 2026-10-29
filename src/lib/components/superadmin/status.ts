@@ -1,6 +1,7 @@
 import type {
 	ApplicationType,
 	EmploymentType,
+	IngestionPaginationType,
 	IngestionSourceType,
 	JobStatus,
 	PackageTier,
@@ -53,13 +54,15 @@ export const jobStatusTone: Record<JobStatus, string> = {
 };
 
 export const sourceTypeLabel: Record<IngestionSourceType, string> = {
-	TELEGRAM_CHANNEL: 'Telegram Channel',
-	CORPORATE_WEBSITE: 'Corporate Website'
+	TELEGRAM: 'Telegram',
+	WEBSITE_HTML: 'Website HTML',
+	WEBSITE_API: 'Website API'
 };
 
 export const sourceTypeTone: Record<IngestionSourceType, string> = {
-	TELEGRAM_CHANNEL: 'bg-sky-500/10 text-sky-300 ring-sky-500/20',
-	CORPORATE_WEBSITE: 'bg-violet-500/10 text-violet-300 ring-violet-500/20'
+	TELEGRAM: 'bg-sky-500/10 text-sky-300 ring-sky-500/20',
+	WEBSITE_HTML: 'bg-violet-500/10 text-violet-300 ring-violet-500/20',
+	WEBSITE_API: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20'
 };
 
 export const applicationTypeLabel: Record<ApplicationType, string> = {
@@ -98,3 +101,13 @@ export function aiOutcomeTone(outcome: string): string {
 		? 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20'
 		: 'bg-rose-500/10 text-rose-300 ring-rose-500/20';
 }
+
+export const ingestionSourceKindLabel = sourceTypeLabel;
+export const ingestionSourceKindTone = sourceTypeTone;
+
+export const ingestionPaginationLabel: Record<IngestionPaginationType, string> = {
+	LOKER_SEMAR: 'Loker Semar',
+	LOKER_MURIA: 'Loker Muria',
+	WORKDAY_JSON: 'Workday JSON',
+	DEFAULT: 'Default'
+};

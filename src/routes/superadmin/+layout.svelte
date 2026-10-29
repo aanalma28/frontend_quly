@@ -9,6 +9,7 @@
 		ChartColumn,
 		Crown,
 		LayoutDashboard,
+		ListChecks,
 		LogOut,
 		Plug,
 		Rss
@@ -24,7 +25,8 @@
 		{ label: 'Executive Overview', href: '/superadmin', icon: LayoutDashboard, exact: true },
 		{ label: 'Live Job Ingestion & Audit', href: '/superadmin/jobs', icon: Rss },
 		{ label: 'Job Statistics', href: '/superadmin/job-statistics', icon: ChartColumn },
-		{ label: 'Ingestion Sources (Telegram Channels)', href: '/superadmin/sources', icon: Plug },
+		{ label: 'Ingestion Sources', href: '/superadmin/sources', icon: Plug },
+		{ label: 'Scraper Runs', href: '/superadmin/scraper-runs', icon: ListChecks },
 		{ label: 'Subscription Packages', href: '/superadmin/packages', icon: Boxes },
 		{ label: 'AI Cost & Token Analytics', href: '/superadmin/ai-analytics', icon: Bot }
 	];
@@ -81,7 +83,10 @@
 			<p class="mt-7 px-2 text-[11px] font-bold uppercase tracking-[0.15em] text-slate-600 md:mt-9">
 				Control Center
 			</p>
-			<nav aria-label="Menu superadmin" class="mt-3 flex gap-2 overflow-x-auto pb-1 md:flex-col md:gap-1">
+			<nav
+				aria-label="Menu superadmin"
+				class="scrollbar-none mt-3 flex gap-2 overflow-x-auto pb-1 md:flex-col md:gap-1"
+			>
 				{#each navigation as item}
 					<a
 						href={item.href}

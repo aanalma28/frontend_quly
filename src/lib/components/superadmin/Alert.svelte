@@ -1,9 +1,9 @@
 <script lang="ts">
-	import { AlertCircle, CheckCircle2, Info, X } from '@lucide/svelte';
+	import { AlertCircle, CheckCircle2, Info, TriangleAlert, X } from '@lucide/svelte';
 
 	interface Props {
 		message: string;
-		type?: 'error' | 'success' | 'info';
+		type?: 'error' | 'success' | 'info' | 'warning';
 		dismissible?: boolean;
 		ondismiss?: () => void;
 	}
@@ -13,7 +13,8 @@
 	const tone: Record<string, string> = {
 		error: 'border-rose-500/30 bg-rose-500/10 text-rose-200',
 		success: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
-		info: 'border-indigo-500/30 bg-indigo-500/10 text-indigo-200'
+		info: 'border-indigo-500/30 bg-indigo-500/10 text-indigo-200',
+		warning: 'border-amber-500/30 bg-amber-500/10 text-amber-200'
 	};
 </script>
 
@@ -24,6 +25,8 @@
 				<AlertCircle size={18} />
 			{:else if type === 'success'}
 				<CheckCircle2 size={18} />
+			{:else if type === 'warning'}
+				<TriangleAlert size={18} />
 			{:else}
 				<Info size={18} />
 			{/if}

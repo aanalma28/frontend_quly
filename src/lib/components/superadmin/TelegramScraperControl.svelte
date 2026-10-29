@@ -73,6 +73,8 @@
 	}
 
 	onMount(() => {
+		// Status-only on mount. Never call toggleTelegramScraperApi here:
+		// the listener must only start/stop from an explicit START/STOP click.
 		void load();
 		pollTimer = setInterval(() => void load(true), 5000);
 		return () => {

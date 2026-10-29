@@ -14,6 +14,15 @@
 
 	let { open, title, description, size = 'md', onclose, children, footer }: Props = $props();
 
+	$effect(() => {
+		if (!open) return;
+		const previous = document.body.style.overflow;
+		document.body.style.overflow = 'hidden';
+		return () => {
+			document.body.style.overflow = previous;
+		};
+	});
+
 	function handleKeydown(event: KeyboardEvent) {
 		if (open && event.key === 'Escape') onclose();
 	}
@@ -30,12 +39,14 @@
 			onclick={onclose}
 		></button>
 		<div
-			class="relative w-full {size === 'lg' ? 'max-w-2xl' : 'max-w-lg'} rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl shadow-black/50"
+			class="relative flex max-h-[calc(100dvh-2rem)] w-full {size === 'lg'
+				? 'max-w-2xl'
+				: 'max-w-lg'} flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-2xl shadow-black/50 sm:p-6"
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby="superadmin-modal-title"
 		>
-			<header class="flex items-start justify-between gap-4">
+			<header class="flex shrink-0 items-start justify-between gap-4">
 				<div>
 					<h2 id="superadmin-modal-title" class="text-lg font-semibold text-white">{title}</h2>
 					{#if description}
@@ -51,9 +62,13 @@
 					<X size={18} />
 				</button>
 			</header>
-			<div class="mt-5 max-h-[70vh] overflow-y-auto">{@render children()}</div>
+			<div class="scrollbar-slim mt-4 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
+				{@render children()}
+			</div>
 			{#if footer}
-				<div class="mt-6 flex flex-wrap justify-end gap-2">{@render footer()}</div>
+				<div class="mt-4 flex shrink-0 flex-wrap justify-end gap-2 border-t border-slate-800 pt-4">
+					{@render footer()}
+				</div>
 			{/if}
 		</div>
 	</div>

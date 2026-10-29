@@ -32,8 +32,9 @@
 	];
 	const sourceTypes: Array<IngestionSourceType | 'ALL'> = [
 		'ALL',
-		'TELEGRAM_CHANNEL',
-		'CORPORATE_WEBSITE'
+		'TELEGRAM',
+		'WEBSITE_HTML',
+		'WEBSITE_API'
 	];
 
 	const initialStatus = appPage.url.searchParams.get('status');

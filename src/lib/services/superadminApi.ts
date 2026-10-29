@@ -17,7 +17,13 @@ export type JobStatus =
 	| 'PUBLISHED'
 	| 'ARCHIVED'
 	| 'REJECTED';
-export type IngestionSourceType = 'TELEGRAM_CHANNEL' | 'CORPORATE_WEBSITE';
+export type IngestionSourceType = 'TELEGRAM' | 'WEBSITE_HTML' | 'WEBSITE_API';
+export type IngestionSourceKind = IngestionSourceType;
+export type IngestionPaginationType =
+	| 'LOKER_SEMAR'
+	| 'LOKER_MURIA'
+	| 'WORKDAY_JSON'
+	| 'DEFAULT';
 export type ApplicationType = 'EMAIL' | 'WEBSITE_PORTAL' | 'WHATSAPP' | 'TELEGRAM';
 export type WorkplaceType = 'REMOTE' | 'WFO' | 'HYBRID';
 export type EmploymentType = 'FULL_TIME' | 'CONTRACT' | 'FREELANCE' | 'INTERNSHIP';
@@ -125,7 +131,7 @@ export interface ScrapedJob {
 	source?: {
 		id: string;
 		name: string;
-		identifier: string;
+		url: string;
 		type: IngestionSourceType;
 	} | null;
 	localImagePath?: string | null;
@@ -191,8 +197,12 @@ export interface ReviewScrapedJobInput {
 export interface IngestionSource {
 	id: string;
 	name: string;
-	type: IngestionSourceType;
-	identifier: string;
+	type: IngestionSourceKind;
+	url: string;
+	paginationType: IngestionPaginationType;
+	maxPages: number | null;
+	listSelector: string | null;
+	detailSelector: string | null;
 	isActive: boolean;
 	lastScrapedAt: string | null;
 	statusMessage: string | null;
@@ -202,9 +212,103 @@ export interface IngestionSource {
 
 export interface IngestionSourceInput {
 	name: string;
-	type: IngestionSourceType;
-	identifier: string;
+	type: IngestionSourceKind;
+	url: string;
+	paginationType: IngestionPaginationType;
+	maxPages?: number | null;
+	listSelector?: string | null;
+	detailSelector?: string | null;
 	isActive?: boolean;
+}
+
+export type UpdateIngestionSourceInput = Partial<IngestionSourceInput>;
+
+export interface DeleteSourceImageFailure {
+	jobId: string;
+	path: string;
+	error: string;
+}
+
+export interface DeleteSourceResult {
+	id: string;
+	deleted: boolean;
+	deletedJobs: number;
+	deletedImages: number;
+	imageDeleteFailures: DeleteSourceImageFailure[];
+}
+
+export interface BulkSourceStatusPayload {
+	ids?: string[];
+	type?: IngestionSourceType;
+	all?: boolean;
+	isActive: boolean;
+}
+
+export interface BulkSourceStatusResult {
+	updated: number;
+	isActive: boolean;
+	scope: {
+		ids: string[] | null;
+		type: IngestionSourceType | null;
+		all: boolean;
+	};
+}
+
+export interface ScraperRunSourceResult {
+	sourceId: string;
+	name: string;
+	type: IngestionSourceType;
+	paginationType: IngestionPaginationType;
+	maxPages?: number;
+	status: string;
+	pagesFetched: number;
+	itemsFound: number;
+	duplicates: number;
+	ingested: number;
+	failed: number;
+	error?: string;
+	startedAt: string;
+	finishedAt: string | null;
+}
+
+export interface ScraperRunTotals {
+	sources: number;
+	pagesFetched: number;
+	itemsFound: number;
+	duplicates: number;
+	ingested: number;
+	failed: number;
+}
+
+export interface ScraperRun {
+	runId: string;
+	status: string;
+	requestedSourceId: string | null;
+	maxPages: number;
+	startedAt: string;
+	finishedAt: string | null;
+	cancelRequested?: boolean;
+	error?: string;
+	sources: ScraperRunSourceResult[];
+	totals: ScraperRunTotals;
+}
+
+export interface StopAllScraperRunsResult {
+	stopped: number;
+	runIds: string[];
+}
+
+export interface StartScraperRunInput {
+	sourceId?: string;
+	maxPages?: number;
+}
+
+export interface StartScraperRunResponse {
+	runId: string;
+	status: string;
+	startedAt: string;
+	requestedSourceId: string | null;
+	maxPages: number;
 }
 
 export interface AiUsageLog {
@@ -330,7 +434,7 @@ export interface ApplicationChargeCounts {
 export interface JobStatisticsSource {
 	sourceId: string;
 	name: string;
-	identifier: string;
+	url: string;
 	type: IngestionSourceType;
 	isActive: boolean;
 	lastScrapedAt: string | null;
@@ -514,25 +618,126 @@ export async function reviewJobApi(
 	return (await response.json()) as ScrapedJob;
 }
 
+function normalizeIngestionSourceType(value: unknown): IngestionSourceKind {
+	if (value === 'TELEGRAM' || value === 'TELEGRAM_CHANNEL') return 'TELEGRAM';
+	if (value === 'WEBSITE_HTML' || value === 'CORPORATE_WEBSITE') return 'WEBSITE_HTML';
+	if (value === 'WEBSITE_API') return 'WEBSITE_API';
+	return 'TELEGRAM';
+}
+
+function normalizeIngestionPaginationType(value: unknown): IngestionPaginationType {
+	if (
+		value === 'LOKER_SEMAR' ||
+		value === 'LOKER_MURIA' ||
+		value === 'WORKDAY_JSON' ||
+		value === 'DEFAULT'
+	) {
+		return value;
+	}
+	return 'DEFAULT';
+}
+
+/**
+ * The backend is being migrated to the URL/pagination/selector contract.
+ * This adapter keeps legacy rows (`TELEGRAM_CHANNEL`/`CORPORATE_WEBSITE` +
+ * `identifier`) renderable while the new endpoints are being implemented.
+ */
+function normalizeIngestionSource(value: unknown): IngestionSource {
+	const raw =
+		typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+
+	return {
+		id: typeof raw.id === 'string' ? raw.id : '',
+		name: typeof raw.name === 'string' ? raw.name : '',
+		type: normalizeIngestionSourceType(raw.type),
+		url:
+			typeof raw.url === 'string'
+				? raw.url
+				: typeof raw.identifier === 'string'
+					? raw.identifier
+					: '',
+		paginationType: normalizeIngestionPaginationType(raw.paginationType),
+		maxPages:
+			typeof raw.maxPages === 'number' && Number.isFinite(raw.maxPages)
+				? raw.maxPages
+				: null,
+		listSelector: typeof raw.listSelector === 'string' ? raw.listSelector : null,
+		detailSelector: typeof raw.detailSelector === 'string' ? raw.detailSelector : null,
+		isActive: raw.isActive !== false,
+		lastScrapedAt: typeof raw.lastScrapedAt === 'string' ? raw.lastScrapedAt : null,
+		statusMessage: typeof raw.statusMessage === 'string' ? raw.statusMessage : null,
+		createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : '',
+		updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : ''
+	};
+}
+
 export async function listSourcesApi(): Promise<IngestionSource[]> {
 	const response = await apiRequest('superadmin/sources');
-	const body = (await response.json()) as { items: IngestionSource[] };
-	return body.items ?? [];
+	const body = (await response.json()) as { items?: unknown[] };
+	return (body.items ?? []).map(normalizeIngestionSource);
 }
 
 export async function createSourceApi(input: IngestionSourceInput): Promise<IngestionSource> {
 	const response = await apiRequest('superadmin/sources', jsonInit('POST', input));
-	return (await response.json()) as IngestionSource;
+	return normalizeIngestionSource(await response.json());
+}
+
+export async function updateSourceApi(
+	id: string,
+	input: UpdateIngestionSourceInput
+): Promise<IngestionSource> {
+	const response = await apiRequest(`superadmin/sources/${id}`, jsonInit('PUT', input));
+	return normalizeIngestionSource(await response.json());
 }
 
 export async function toggleSourceApi(id: string): Promise<IngestionSource> {
 	const response = await apiRequest(`superadmin/sources/${id}/toggle`, { method: 'PATCH' });
-	return (await response.json()) as IngestionSource;
+	return normalizeIngestionSource(await response.json());
 }
 
-export async function deleteSourceApi(id: string): Promise<{ id: string; deleted: boolean }> {
+export async function bulkUpdateSourceStatusApi(
+	payload: BulkSourceStatusPayload
+): Promise<BulkSourceStatusResult> {
+	const response = await apiRequest(
+		'superadmin/sources/bulk-status',
+		jsonInit('PATCH', payload)
+	);
+	return (await response.json()) as BulkSourceStatusResult;
+}
+
+export async function startScraperRunApi(
+	input: StartScraperRunInput
+): Promise<StartScraperRunResponse> {
+	const response = await apiRequest('superadmin/scraper/run', jsonInit('POST', input));
+	return (await response.json()) as StartScraperRunResponse;
+}
+
+export async function getScraperRunApi(runId: string): Promise<ScraperRun> {
+	const response = await apiRequest(`superadmin/scraper/runs/${runId}`);
+	return (await response.json()) as ScraperRun;
+}
+
+export async function stopScraperRunApi(runId: string): Promise<ScraperRun> {
+	const response = await apiRequest(`superadmin/scraper/runs/${runId}/stop`, {
+		method: 'POST'
+	});
+	return (await response.json()) as ScraperRun;
+}
+
+export async function stopAllScraperRunsApi(): Promise<StopAllScraperRunsResult> {
+	const response = await apiRequest('superadmin/scraper/stop', { method: 'POST' });
+	return (await response.json()) as StopAllScraperRunsResult;
+}
+
+export async function listScraperRunsApi(): Promise<ScraperRun[]> {
+	const response = await apiRequest('superadmin/scraper/runs');
+	const body = (await response.json()) as { items?: ScraperRun[] };
+	return body.items ?? [];
+}
+
+export async function deleteSourceApi(id: string): Promise<DeleteSourceResult> {
 	const response = await apiRequest(`superadmin/sources/${id}`, { method: 'DELETE' });
-	return (await response.json()) as { id: string; deleted: boolean };
+	return (await response.json()) as DeleteSourceResult;
 }
 
 export type TelegramScraperAction = 'START' | 'STOP';

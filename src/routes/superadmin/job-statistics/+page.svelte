@@ -487,7 +487,7 @@
 									<td class="px-5 py-4">
 										<div class="min-w-0">
 											<p class="font-semibold text-white">{source.name}</p>
-											<p class="mt-0.5 text-[11px] text-slate-500">{source.identifier}</p>
+											<p class="mt-0.5 text-[11px] text-slate-500">{source.url}</p>
 											<span
 												class="mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset {sourceTypeTone[source.type]}"
 											>
