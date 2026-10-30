@@ -10,6 +10,7 @@
 		Search,
 		Sparkles,
 		Target,
+		X,
 		Zap
 	} from '@lucide/svelte';
 	import {
@@ -30,6 +31,28 @@
 	let paygPrice = $state(500);
 	let plansLoading = $state(true);
 	let plansError = $state<string | null>(null);
+	let detailPlan = $state<PublicBillingPlan | null>(null);
+
+	$effect(() => {
+		if (!detailPlan) return;
+		const previous = document.body.style.overflow;
+		document.body.style.overflow = 'hidden';
+		return () => {
+			document.body.style.overflow = previous;
+		};
+	});
+
+	function openPlan(plan: PublicBillingPlan) {
+		detailPlan = plan;
+	}
+
+	function closePlan() {
+		detailPlan = null;
+	}
+
+	function handleKeydown(event: KeyboardEvent) {
+		if (detailPlan && event.key === 'Escape') closePlan();
+	}
 
 	const opportunities = [
 		{ company: 'Nusa Teknologi', role: 'Frontend Developer', match: '92%', initials: 'N', tone: 'blue' },
@@ -116,6 +139,8 @@
 		return () => document.documentElement.classList.remove('landing-page');
 	});
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <svelte:head>
 	<title>AI Job Hunter — Cari kerja, lebih terarah</title>
@@ -325,18 +350,18 @@
 								<strong>{formatRupiah(plan.priceIdr)}</strong><span>/{billingPeriodLabel(plan.billingPeriod)}</span>
 							</div>
 							<div class="pricing-quota"><Mail size={15} /> {planQuotaText(plan)}</div>
-							<p class="pricing-quota-details">
-								CV {quotaLabel(plan.quotas.cvExtraction, 'x')} · Psikotes
-								{quotaLabel(plan.quotas.psychotest, 'x')} · Scoring
-								{quotaLabel(plan.quotas.jobScoring, 'x')} · Loker luar
-								{quotaLabel(plan.quotas.externalJobExtraction, 'x')} · Token AI
-								{quotaLabel(plan.quotas.aiTokenLimit, 'token')}
-							</p>
 							<ul>
-								{#each plan.features as feature}
+								{#each plan.features.slice(0, 3) as feature}
 									<li><Check size={14} /> {feature}</li>
 								{/each}
 							</ul>
+							<button type="button" class="pricing-more" onclick={() => openPlan(plan)}>
+								Lihat selengkapnya
+								{#if plan.features.length > 3}
+									<span>+{plan.features.length - 3} benefit</span>
+								{/if}
+								<ArrowRight size={13} />
+							</button>
 							<a
 								class="pricing-cta {plan.isPopular ? 'pricing-cta-featured' : ''}"
 								href="/billing#paket"
@@ -434,6 +459,95 @@
 		<span class="copyright">© 2026 AI Job Hunter</span>
 	</footer>
 </div>
+
+{#if detailPlan}
+	<div
+		class="pricing-detail-overlay"
+		role="presentation"
+		onclick={(event) => {
+			if (event.target === event.currentTarget) closePlan();
+		}}
+	>
+		<div
+			class="pricing-detail-panel"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="pricing-detail-title"
+		>
+			<button
+				type="button"
+				class="pricing-detail-close"
+				aria-label="Tutup detail paket"
+				onclick={closePlan}
+			>
+				<X size={18} />
+			</button>
+
+			<div class="pricing-detail-badges">
+				<span class="pricing-detail-tier">{detailPlan.tier}</span>
+				{#if detailPlan.badge}
+					<span class="pricing-detail-badge">{detailPlan.badge}</span>
+				{/if}
+			</div>
+			<h2 id="pricing-detail-title">{detailPlan.name}</h2>
+			{#if detailPlan.subtitle}
+				<p class="pricing-detail-subtitle">{detailPlan.subtitle}</p>
+			{/if}
+
+			<div class="pricing-detail-price">
+				{#if detailPlan.originalPriceIdr != null && detailPlan.originalPriceIdr > detailPlan.priceIdr}
+					<span class="pricing-detail-original">{formatRupiah(detailPlan.originalPriceIdr)}</span>
+				{/if}
+				<strong>{formatRupiah(detailPlan.priceIdr)}</strong>
+				<span>/{billingPeriodLabel(detailPlan.billingPeriod)}</span>
+			</div>
+
+			<div class="pricing-detail-quotas">
+				<div>
+					<span>CV</span>
+					<strong>{quotaLabel(detailPlan.quotas.cvExtraction, 'x')}</strong>
+				</div>
+				<div>
+					<span>Psikotes</span>
+					<strong>{quotaLabel(detailPlan.quotas.psychotest, 'x')}</strong>
+				</div>
+				<div>
+					<span>Scoring</span>
+					<strong>{quotaLabel(detailPlan.quotas.jobScoring, 'x')}</strong>
+				</div>
+				<div>
+					<span>Loker luar</span>
+					<strong>{quotaLabel(detailPlan.quotas.externalJobExtraction, 'x')}</strong>
+				</div>
+				<div>
+					<span>Email lamaran</span>
+					<strong>{quotaLabel(detailPlan.quotas.emailApplications, 'x')}</strong>
+				</div>
+				<div>
+					<span>Token AI</span>
+					<strong>{quotaLabel(detailPlan.quotas.aiTokenLimit, 'token')}</strong>
+				</div>
+			</div>
+
+			<div class="pricing-detail-features">
+				<h3>Benefit paket</h3>
+				{#if detailPlan.features.length > 0}
+					<ul>
+						{#each detailPlan.features as feature}
+							<li><Check size={14} /> {feature}</li>
+						{/each}
+					</ul>
+				{:else}
+					<p class="pricing-detail-empty">Belum ada rincian fitur.</p>
+				{/if}
+			</div>
+
+			<a class="pricing-detail-cta" href="/billing#paket" onclick={closePlan}>
+				{detailPlan.buttonLabel ?? 'Pilih Paket Ini'} <ArrowRight size={15} />
+			</a>
+		</div>
+	</div>
+{/if}
 
 <style>
 	:global(html.landing-page) {
@@ -1351,17 +1465,40 @@
 		color: #5e4bc8;
 	}
 
-	.pricing-quota-details {
-		margin: 6px 1px 0;
-		color: #8c899b;
-		font-size: 10px;
-		line-height: 1.6;
+	.pricing-more {
+		display: inline-flex;
+		align-items: center;
+		align-self: flex-start;
+		gap: 5px;
+		margin: -2px 0 16px;
+		padding: 0;
+		border: 0;
+		background: none;
+		color: #6753d4;
+		font-size: 11px;
+		font-weight: 700;
+		cursor: pointer;
+	}
+
+	.pricing-more span {
+		color: #9a97aa;
+		font-weight: 600;
+	}
+
+	.pricing-more:hover {
+		text-decoration: underline;
+	}
+
+	.pricing-more:focus-visible {
+		outline: 2px solid #8b78e8;
+		outline-offset: 3px;
+		border-radius: 3px;
 	}
 
 	.pricing-card ul {
 		display: grid;
 		gap: 9px;
-		margin: 17px 0 20px;
+		margin: 17px 0 10px;
 		padding: 0;
 		list-style: none;
 	}
@@ -1379,6 +1516,237 @@
 		flex: 0 0 auto;
 		margin-top: 1px;
 		color: #5a9a72;
+	}
+
+	.pricing-detail-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 80;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 20px;
+		background: rgb(31 27 54 / 58%);
+		backdrop-filter: blur(5px);
+	}
+
+	.pricing-detail-panel {
+		position: relative;
+		width: min(640px, 100%);
+		max-height: calc(100dvh - 40px);
+		overflow-y: auto;
+		padding: 32px;
+		border: 1px solid #e9e5f4;
+		border-radius: 22px;
+		background: white;
+		box-shadow: 0 28px 80px rgb(34 26 94 / 28%);
+		color: #292941;
+	}
+
+	.pricing-detail-close {
+		position: absolute;
+		top: 16px;
+		right: 16px;
+		display: grid;
+		width: 34px;
+		height: 34px;
+		place-items: center;
+		border: 1px solid #ece9f3;
+		border-radius: 10px;
+		background: white;
+		color: #777488;
+		cursor: pointer;
+		transition:
+			background 160ms ease,
+			color 160ms ease;
+	}
+
+	.pricing-detail-close:hover {
+		background: #f5f2ff;
+		color: #5d49c6;
+	}
+
+	.pricing-detail-badges {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 7px;
+		padding-right: 40px;
+	}
+
+	.pricing-detail-tier {
+		padding: 5px 9px;
+		border-radius: 20px;
+		background: #f1edff;
+		color: #6753d4;
+		font-size: 9px;
+		font-weight: 750;
+		letter-spacing: 0.6px;
+		text-transform: uppercase;
+	}
+
+	.pricing-detail-badge {
+		padding: 5px 9px;
+		border-radius: 20px;
+		background: #fff3d9;
+		color: #9a6b10;
+		font-size: 9px;
+		font-weight: 700;
+	}
+
+	.pricing-detail-panel h2 {
+		margin: 13px 0 0;
+		color: #292941;
+		font-size: 26px;
+		font-weight: 750;
+		letter-spacing: -0.8px;
+	}
+
+	.pricing-detail-subtitle {
+		margin: 7px 0 0;
+		color: #737286;
+		font-size: 12px;
+		line-height: 1.6;
+	}
+
+	.pricing-detail-price {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 5px;
+		margin-top: 18px;
+	}
+
+	.pricing-detail-price strong {
+		color: #292941;
+		font-size: 30px;
+		font-weight: 780;
+		letter-spacing: -1.1px;
+	}
+
+	.pricing-detail-price span {
+		color: #8a8999;
+		font-size: 11px;
+	}
+
+	.pricing-detail-price .pricing-detail-original {
+		color: #a5a3b1;
+		font-size: 11px;
+		font-weight: 600;
+		text-decoration: line-through;
+	}
+
+	.pricing-detail-quotas {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+		gap: 8px;
+		margin-top: 20px;
+	}
+
+	.pricing-detail-quotas > div {
+		padding: 10px 11px;
+		border: 1px solid #eeebf5;
+		border-radius: 10px;
+		background: #faf9fd;
+	}
+
+	.pricing-detail-quotas span {
+		display: block;
+		color: #9290a0;
+		font-size: 9px;
+		font-weight: 650;
+		letter-spacing: 0.45px;
+		text-transform: uppercase;
+	}
+
+	.pricing-detail-quotas strong {
+		display: block;
+		margin-top: 3px;
+		color: #4f4c65;
+		font-size: 12px;
+		font-weight: 700;
+	}
+
+	.pricing-detail-features {
+		margin-top: 23px;
+	}
+
+	.pricing-detail-features h3 {
+		margin: 0 0 12px;
+		color: #292941;
+		font-size: 14px;
+		font-weight: 750;
+	}
+
+	.pricing-detail-features ul {
+		display: grid;
+		gap: 10px;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.pricing-detail-features li {
+		display: flex;
+		align-items: flex-start;
+		gap: 8px;
+		color: #5f5e73;
+		font-size: 12px;
+		line-height: 1.6;
+	}
+
+	.pricing-detail-features li :global(svg) {
+		flex: 0 0 auto;
+		margin-top: 2px;
+		color: #5a9a72;
+	}
+
+	.pricing-detail-empty {
+		color: #9290a0;
+		font-size: 12px;
+	}
+
+	.pricing-detail-cta {
+		display: flex;
+		min-height: 44px;
+		align-items: center;
+		justify-content: center;
+		gap: 7px;
+		margin-top: 24px;
+		border: 1px solid #6753d4;
+		border-radius: 11px;
+		background: #6753d4;
+		color: white;
+		font-size: 12px;
+		font-weight: 700;
+		text-decoration: none;
+		transition:
+			background 180ms ease,
+			border-color 180ms ease;
+	}
+
+	.pricing-detail-cta:hover {
+		border-color: #5a46c6;
+		background: #5a46c6;
+	}
+
+	@media (max-width: 680px) {
+		.pricing-detail-overlay {
+			padding: 12px;
+		}
+
+		.pricing-detail-panel {
+			max-height: calc(100dvh - 24px);
+			padding: 24px 18px;
+			border-radius: 18px;
+		}
+
+		.pricing-detail-panel h2 {
+			font-size: 22px;
+		}
+
+		.pricing-detail-price strong {
+			font-size: 26px;
+		}
 	}
 
 	.pricing-cta {
