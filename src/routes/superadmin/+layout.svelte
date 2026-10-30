@@ -7,12 +7,14 @@
 		Bot,
 		Boxes,
 		ChartColumn,
+		CreditCard,
 		Crown,
 		LayoutDashboard,
 		ListChecks,
 		LogOut,
 		Plug,
-		Rss
+		Rss,
+		Users
 	} from '@lucide/svelte';
 	import { auth, getUserRole, initializeAuth, logout } from '#lib/stores/auth.js';
 	import type { LayoutProps } from './$types';
@@ -27,6 +29,8 @@
 		{ label: 'Job Statistics', href: '/superadmin/job-statistics', icon: ChartColumn },
 		{ label: 'Ingestion Sources', href: '/superadmin/sources', icon: Plug },
 		{ label: 'Scraper Runs', href: '/superadmin/scraper-runs', icon: ListChecks },
+		{ label: 'User Management', href: '/superadmin/users', icon: Users },
+		{ label: 'Billing Management', href: '/superadmin/billing', icon: CreditCard },
 		{ label: 'Subscription Packages', href: '/superadmin/packages', icon: Boxes },
 		{ label: 'AI Cost & Token Analytics', href: '/superadmin/ai-analytics', icon: Bot }
 	];
@@ -85,7 +89,7 @@
 			</p>
 			<nav
 				aria-label="Menu superadmin"
-				class="scrollbar-none mt-3 flex gap-2 overflow-x-auto pb-1 md:flex-col md:gap-1"
+				class="mt-3 flex gap-2 overflow-x-auto pb-1 md:min-h-0 md:flex-1 md:flex-col md:gap-1 md:overflow-y-auto md:pr-1"
 			>
 				{#each navigation as item}
 					<a

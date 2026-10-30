@@ -4,10 +4,8 @@
 		Antenna,
 		ArrowRight,
 		BriefcaseBusiness,
-		CheckCircle2,
 		Mail,
 		RefreshCw,
-		Send,
 		TriangleAlert
 	} from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
@@ -55,13 +53,6 @@
 		rose: 'bg-rose-500/10 text-rose-300 ring-rose-500/20',
 		amber: 'bg-amber-500/10 text-amber-300 ring-amber-500/20',
 		emerald: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20'
-	};
-	const applicationStatusOrder = ['PENDING', 'SENT', 'REPLIED', 'FAILED'] as const;
-	const applicationStatusColors: Record<(typeof applicationStatusOrder)[number], string> = {
-		PENDING: '#f59e0b',
-		SENT: '#10b981',
-		REPLIED: '#22d3ee',
-		FAILED: '#f43f5e'
 	};
 
 	function isoDate(date: Date): string {
@@ -235,7 +226,7 @@
 			<p class="text-sm font-semibold text-amber-300">Job &amp; Ingestion</p>
 			<h1 class="mt-1 text-2xl font-bold tracking-tight text-white">Job Statistics</h1>
 			<p class="mt-2 text-sm text-slate-400">
-				Statistik lowongan per grup Telegram, kualitas sumber, dan performa auto-apply.
+				Statistik lowongan per grup Telegram, kualitas sumber, dan performa ingestion.
 			</p>
 		</div>
 		<div class="flex flex-wrap items-center gap-2">
@@ -316,7 +307,7 @@
 			</button>
 		</div>
 	{:else if data}
-		<section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+		<section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 			<KpiCard
 				label="Total Jobs"
 				value={formatNumber(data.jobs.total)}
@@ -337,20 +328,6 @@
 				hint={`${formatNumber(data.jobs.applicationMethods.EMAIL)} job via email`}
 				icon={Mail}
 				tone="violet"
-			/>
-			<KpiCard
-				label="Aplikasi Terkirim"
-				value={formatNumber(data.applications.sent)}
-				hint={`dari ${formatNumber(data.applications.total)} aplikasi`}
-				icon={Send}
-				tone="cyan"
-			/>
-			<KpiCard
-				label="Delivery Rate"
-				value={formatPercent(data.applications.deliveryRate)}
-				hint={`channel ${data.applications.deliveryChannel}`}
-				icon={CheckCircle2}
-				tone="amber"
 			/>
 		</section>
 
@@ -665,91 +642,5 @@
 			</section>
 		{/if}
 
-		<section class="grid gap-4 lg:grid-cols-2">
-			<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-				<h2 class="text-sm font-semibold text-white">Auto-Apply Applications</h2>
-				<p class="mt-1 text-xs text-slate-500">
-					Statistik lamaran yang dikirim otomatis. Angka bersifat global, belum dipecah per grup.
-				</p>
-				<div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-					<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
-						<p class="text-[10px] uppercase tracking-wide text-slate-500">Total</p>
-						<p class="mt-1 text-lg font-bold text-white">
-							{formatNumber(data.applications.total)}
-						</p>
-					</div>
-					<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
-						<p class="text-[10px] uppercase tracking-wide text-slate-500">Terkirim</p>
-						<p class="mt-1 text-lg font-bold text-white">
-							{formatNumber(data.applications.sent)}
-						</p>
-					</div>
-					<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
-						<p class="text-[10px] uppercase tracking-wide text-slate-500">Replied</p>
-						<p class="mt-1 text-lg font-bold text-white">
-							{formatNumber(data.applications.replied)}
-						</p>
-					</div>
-					<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
-						<p class="text-[10px] uppercase tracking-wide text-slate-500">Gagal</p>
-						<p class="mt-1 text-lg font-bold text-white">
-							{formatNumber(data.applications.failed)}
-						</p>
-					</div>
-				</div>
-				<div class="mt-4">
-					<div class="flex items-center justify-between text-xs">
-						<span class="text-slate-400">Delivery rate</span>
-						<span class="font-semibold text-white">
-							{formatPercent(data.applications.deliveryRate)}
-						</span>
-					</div>
-					<div class="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-800">
-						<span
-							class="block h-full rounded-full bg-emerald-500"
-							style:width={`${data.applications.deliveryRate * 100}%`}
-						></span>
-					</div>
-					<p class="mt-1 text-[11px] text-slate-500">
-						Channel: {data.applications.deliveryChannel}
-					</p>
-				</div>
-			</div>
-
-			<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-				<h2 class="text-sm font-semibold text-white">Status &amp; Billing Aplikasi</h2>
-				<p class="mt-1 text-xs text-slate-500">
-					Breakdown status pengiriman dan tipe biaya.
-				</p>
-				<div class="mt-4 grid grid-cols-2 gap-3">
-					{#each applicationStatusOrder as status}
-						{@const count = data.applications.byStatus[status]}
-						<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
-							<p class="text-[10px] uppercase tracking-wide text-slate-500">{status}</p>
-							<p class="mt-1 text-lg font-bold text-white">{formatNumber(count)}</p>
-							<div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-800">
-								<span
-									class="block h-full rounded-full"
-									style:width={`${data.applications.total > 0 ? (count / data.applications.total) * 100 : 0}%`}
-									style:background={applicationStatusColors[status]}
-								></span>
-							</div>
-						</div>
-					{/each}
-				</div>
-				<div class="mt-4 flex flex-wrap gap-2 text-xs">
-					<span class="rounded-full border border-slate-700 px-2.5 py-1 text-slate-300">
-						Monthly Quota: {formatNumber(data.applications.byChargeType.MONTHLY_QUOTA)}
-					</span>
-					<span class="rounded-full border border-slate-700 px-2.5 py-1 text-slate-300">
-						PAYG: {formatNumber(data.applications.byChargeType.PAYG)}
-					</span>
-				</div>
-				<p class="mt-3 text-[11px] text-slate-500">
-					Statistik aplikasi bersifat global; belum dipecah per grup karena model Application belum
-					menyimpan sourceId.
-				</p>
-			</div>
-		</section>
 	{/if}
 </div>

@@ -1,24 +1,31 @@
 import type {
+	ApplicationChargeType,
+	ApplicationStatus,
 	ApplicationType,
+	BillingStatus,
 	EmploymentType,
 	IngestionPaginationType,
 	IngestionSourceType,
 	JobStatus,
 	PackageTier,
 	SubStatus,
+	SubscriptionTier,
+	UserRole,
 	WorkplaceType
 } from '#lib/services/superadminApi.js';
 
 export const tierLabel: Record<PackageTier, string> = {
 	FREE: 'Free',
+	STARTER: 'Starter',
 	PRO: 'Pro',
-	ENTERPRISE: 'Enterprise'
+	UNLIMITED: 'Unlimited'
 };
 
 export const tierTone: Record<PackageTier, string> = {
 	FREE: 'bg-slate-500/10 text-slate-300 ring-slate-500/20',
+	STARTER: 'bg-sky-500/10 text-sky-300 ring-sky-500/20',
 	PRO: 'bg-indigo-500/10 text-indigo-300 ring-indigo-500/20',
-	ENTERPRISE: 'bg-amber-500/10 text-amber-300 ring-amber-500/20'
+	UNLIMITED: 'bg-amber-500/10 text-amber-300 ring-amber-500/20'
 };
 
 export const subscriptionStatusLabel: Record<SubStatus, string> = {
@@ -31,6 +38,67 @@ export const subscriptionStatusTone: Record<SubStatus, string> = {
 	ACTIVE: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20',
 	EXPIRED: 'bg-amber-500/10 text-amber-300 ring-amber-500/20',
 	CANCELLED: 'bg-rose-500/10 text-rose-300 ring-rose-500/20'
+};
+
+export const subscriptionTierLabel: Record<SubscriptionTier, string> = {
+	FREE_PLAN: 'Free Plan',
+	STARTER_PLAN: 'Starter Plan',
+	PRO_PLAN: 'Pro Plan',
+	UNLIMITED_PLAN: 'Unlimited Plan'
+};
+
+export const subscriptionTierTone: Record<SubscriptionTier, string> = {
+	FREE_PLAN: 'bg-slate-500/10 text-slate-300 ring-slate-500/20',
+	STARTER_PLAN: 'bg-sky-500/10 text-sky-300 ring-sky-500/20',
+	PRO_PLAN: 'bg-indigo-500/10 text-indigo-300 ring-indigo-500/20',
+	UNLIMITED_PLAN: 'bg-amber-500/10 text-amber-300 ring-amber-500/20'
+};
+
+export const billingStatusLabel: Record<BillingStatus, string> = {
+	ACTIVE: 'Aktif',
+	EXPIRED: 'Expired',
+	CANCELLED: 'Dibatalkan',
+	FREE: 'Free',
+	NO_SUBSCRIPTION: 'Belum berlangganan'
+};
+
+export const billingStatusTone: Record<BillingStatus, string> = {
+	ACTIVE: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20',
+	EXPIRED: 'bg-amber-500/10 text-amber-300 ring-amber-500/20',
+	CANCELLED: 'bg-rose-500/10 text-rose-300 ring-rose-500/20',
+	FREE: 'bg-slate-500/10 text-slate-300 ring-slate-500/20',
+	NO_SUBSCRIPTION: 'bg-slate-800 text-slate-400 ring-slate-700'
+};
+
+export const userRoleLabel: Record<UserRole, string> = {
+	JOB_SEEKER: 'Job Seeker',
+	ADMIN: 'Admin',
+	SUPER_ADMIN: 'Super Admin'
+};
+
+export const userRoleTone: Record<UserRole, string> = {
+	JOB_SEEKER: 'bg-sky-500/10 text-sky-300 ring-sky-500/20',
+	ADMIN: 'bg-amber-500/10 text-amber-300 ring-amber-500/20',
+	SUPER_ADMIN: 'bg-rose-500/10 text-rose-300 ring-rose-500/20'
+};
+
+export const applicationStatusLabel: Record<ApplicationStatus, string> = {
+	PENDING: 'Menunggu',
+	SENT: 'Terkirim',
+	REPLIED: 'Dibalas',
+	FAILED: 'Gagal'
+};
+
+export const applicationStatusTone: Record<ApplicationStatus, string> = {
+	PENDING: 'bg-amber-500/10 text-amber-300 ring-amber-500/20',
+	SENT: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20',
+	REPLIED: 'bg-cyan-500/10 text-cyan-300 ring-cyan-500/20',
+	FAILED: 'bg-rose-500/10 text-rose-300 ring-rose-500/20'
+};
+
+export const applicationChargeTypeLabel: Record<ApplicationChargeType, string> = {
+	MONTHLY_QUOTA: 'Kuota bulanan',
+	PAYG: 'PAYG'
 };
 
 export const jobStatusLabel: Record<JobStatus, string> = {

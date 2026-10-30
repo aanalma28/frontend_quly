@@ -7,8 +7,18 @@ import { apiRequest } from '#lib/utils/api.js';
  * Bearer token and throws `ApiError` (status/code/message) on failure.
  */
 
-export type PackageTier = 'FREE' | 'PRO' | 'ENTERPRISE';
+export type PackageTier = 'FREE' | 'STARTER' | 'PRO' | 'UNLIMITED';
+export type BillingPeriod = 'FOREVER' | 'MONTHLY' | 'YEARLY';
 export type SubStatus = 'ACTIVE' | 'EXPIRED' | 'CANCELLED';
+export type UserRole = 'JOB_SEEKER' | 'ADMIN' | 'SUPER_ADMIN';
+export type SubscriptionTier =
+	| 'FREE_PLAN'
+	| 'STARTER_PLAN'
+	| 'PRO_PLAN'
+	| 'UNLIMITED_PLAN';
+export type BillingStatus = 'ACTIVE' | 'EXPIRED' | 'CANCELLED' | 'FREE' | 'NO_SUBSCRIPTION';
+export type ApplicationStatus = 'PENDING' | 'SENT' | 'REPLIED' | 'FAILED';
+export type ApplicationChargeType = 'MONTHLY_QUOTA' | 'PAYG';
 export type JobStatus =
 	| 'RAW_PARSED'
 	| 'PENDING_REVIEW'
@@ -28,13 +38,30 @@ export type ApplicationType = 'EMAIL' | 'WEBSITE_PORTAL' | 'WHATSAPP' | 'TELEGRA
 export type WorkplaceType = 'REMOTE' | 'WFO' | 'HYBRID';
 export type EmploymentType = 'FULL_TIME' | 'CONTRACT' | 'FREELANCE' | 'INTERNSHIP';
 
+export interface PackageQuotas {
+	cvExtraction: number;
+	psychotest: number;
+	jobScoring: number;
+	externalJobExtraction: number;
+	emailApplications: number;
+	aiTokenLimit: number;
+}
+
 export interface SubscriptionPackage {
 	id: string;
 	name: string;
 	tier: PackageTier;
+	subtitle: string | null;
 	price: number;
+	originalPrice: number | null;
+	billingPeriod: BillingPeriod;
 	durationDays: number;
+	buttonLabel: string | null;
+	badge: string | null;
+	isPopular: boolean;
+	sortOrder: number;
 	aiTokenLimit: number;
+	quotas: PackageQuotas;
 	features: string[];
 	isActive: boolean;
 	subscriberCount: number;
@@ -45,9 +72,21 @@ export interface SubscriptionPackage {
 export interface SubscriptionPackageInput {
 	name: string;
 	tier: PackageTier;
+	subtitle?: string | null;
 	price: number;
+	originalPrice?: number | null;
+	billingPeriod?: BillingPeriod;
 	durationDays: number;
+	buttonLabel?: string | null;
+	badge?: string | null;
+	isPopular?: boolean;
+	sortOrder?: number;
 	aiTokenLimit: number;
+	cvExtractionLimit?: number;
+	psychotestLimit?: number;
+	jobScoringLimit?: number;
+	externalJobExtractionLimit?: number;
+	emailApplicationLimit?: number;
 	features: string[];
 	isActive?: boolean;
 }
@@ -97,6 +136,274 @@ export interface SubscriptionsQuery {
 	page?: number;
 	limit?: number;
 	search?: string;
+}
+
+export interface UserSubscriptionPackage {
+	id: string;
+	name: string;
+	tier: PackageTier;
+	price: number;
+	durationDays: number;
+	aiTokenLimit: number;
+}
+
+export interface UserSubscriptionSnapshot {
+	id: string;
+	status: SubStatus;
+	package: UserSubscriptionPackage;
+	startDate: string;
+	endDate: string;
+	remainingDays: number;
+}
+
+export interface UserProfile {
+	fullName: string | null;
+	phone: string | null;
+	headline: string | null;
+	targetRole: string | null;
+	targetDomicile: string | null;
+	yearsOfExperience: number | null;
+	skills: string[];
+}
+
+export interface UserAccount {
+	emailVerified: boolean;
+	onboardingCompleted: boolean;
+	acceptedTerms: boolean;
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface UserApplicationMetrics {
+	total: number;
+	byStatus: ApplicationStatusCounts;
+	byChargeType: ApplicationChargeCounts;
+	replyRate: number;
+	lastApplicationAt: string | null;
+}
+
+export interface UserQuotas {
+	monthlyQuota: number;
+	monthlyUsed: number;
+	monthlyRemaining: number;
+	quotaResetAt: string | null;
+	paygBalance: number;
+	monthlyTestQuota: number;
+	monthlyTestUsed: number;
+	monthlyTestRemaining: number;
+	testQuotaResetAt: string | null;
+}
+
+export interface UserCounts {
+	cvFiles: number;
+	userCvs: number;
+	psychotestSessions: number;
+}
+
+export interface UserListItem {
+	id: string;
+	email: string;
+	role: UserRole;
+	tier: SubscriptionTier;
+	billingStatus: BillingStatus;
+	profile: UserProfile;
+	account: UserAccount;
+	subscription: UserSubscriptionSnapshot | null;
+	applications: UserApplicationMetrics;
+	quotas: UserQuotas;
+	counts: UserCounts;
+}
+
+export interface UserListResponse {
+	items: UserListItem[];
+	meta: PaginationMeta;
+}
+
+export interface UserListQuery {
+	search?: string;
+	role?: UserRole;
+	tier?: SubscriptionTier;
+	subscriptionStatus?: SubStatus;
+	emailVerified?: boolean;
+	onboardingCompleted?: boolean;
+	page?: number;
+	limit?: number;
+}
+
+export interface UserStatsResponse {
+	users: {
+		total: number;
+		jobSeekers: number;
+		admins: number;
+		superAdmins: number;
+		emailVerified: number;
+		onboardingCompleted: number;
+	};
+	tiers: Record<SubscriptionTier, number>;
+	applications: {
+		total: number;
+		byStatus: ApplicationStatusCounts;
+		byChargeType: ApplicationChargeCounts;
+		replyRate: number;
+		usersWithApplications: number;
+		averagePerUser: number;
+		lastApplicationAt: string | null;
+	};
+}
+
+export interface RecentApplication {
+	id: string;
+	companyName: string;
+	jobTitle: string;
+	recipientEmail?: string | null;
+	status: ApplicationStatus;
+	chargeType: ApplicationChargeType;
+	sentAt: string | null;
+	repliedAt: string | null;
+	failureReason: string | null;
+	createdAt: string;
+	updatedAt?: string;
+}
+
+export interface UserDetail extends UserListItem {
+	recentApplications: RecentApplication[];
+}
+
+export interface UpdateUserRoleResponse {
+	id: string;
+	email: string;
+	role: UserRole;
+	updatedAt: string;
+}
+
+export interface BillingSubscriptionPackage extends UserSubscriptionPackage {
+	features: string[];
+}
+
+export interface BillingSubscription {
+	id: string;
+	status: SubStatus;
+	package: BillingSubscriptionPackage;
+	startDate: string;
+	endDate: string;
+	remainingDays: number;
+}
+
+export interface BillingBreakdown {
+	activeSubscriptionValueIdr: number;
+	paygApplications: number;
+	paygConsumedValueIdr: number;
+	estimatedBillingValueIdr: number;
+}
+
+export interface BillingAccount {
+	emailVerified: boolean;
+	onboardingCompleted: boolean;
+	createdAt: string;
+}
+
+export interface BillingUserItem {
+	userId: string;
+	email: string;
+	role: UserRole;
+	fullName: string | null;
+	tier: SubscriptionTier;
+	billingStatus: BillingStatus;
+	subscription: BillingSubscription | null;
+	quotas: UserQuotas;
+	applications: UserApplicationMetrics;
+	billing: BillingBreakdown;
+	account: BillingAccount;
+}
+
+export interface BillingUsersResponse {
+	items: BillingUserItem[];
+	meta: PaginationMeta;
+}
+
+export interface BillingUserDetail extends BillingUserItem {
+	recentApplications: RecentApplication[];
+}
+
+export interface BillingUsersQuery {
+	search?: string;
+	billingStatus?: BillingStatus;
+	tier?: SubscriptionTier;
+	role?: UserRole;
+	packageId?: string;
+	page?: number;
+	limit?: number;
+}
+
+export interface BillingOverviewResponse {
+	generatedAt: string;
+	users: {
+		total: number;
+		jobSeekers: number;
+		withSubscription: number;
+		withoutSubscription: number;
+		freeTier: number;
+		paidTier: number;
+		activeSubscribers: number;
+		expiredSubscribers: number;
+		cancelledSubscribers: number;
+		byTier: Record<SubscriptionTier, number>;
+	};
+	subscriptions: {
+		total: number;
+		active: number;
+		expired: number;
+		cancelled: number;
+		expiring7Days: number;
+		expiring30Days: number;
+		byStatus: Record<SubStatus, number>;
+		byPackage: Array<{
+			packageId: string;
+			name: string;
+			tier: PackageTier;
+			price: number;
+			activeSubscribers: number;
+			activeValueIdr: number;
+		}>;
+	};
+	revenue: {
+		activeSubscriptionValueIdr: number;
+		averageActiveSubscriptionValueIdr: number;
+		paygPricePerApplicationIdr: number;
+		paygApplications: number;
+		paygConsumedValueIdr: number;
+		estimatedBillingValueIdr: number;
+	};
+	quotas: {
+		monthlyApplicationsUsed: number;
+		totalPaygBalance: number;
+	};
+	applications: {
+		total: number;
+		byStatus: ApplicationStatusCounts;
+		byChargeType: ApplicationChargeCounts;
+		replyRate: number;
+		lastApplicationAt: string | null;
+	};
+}
+
+export interface UpdateUserQuotasInput {
+	monthlyQuota?: number;
+	monthlyUsed?: number;
+	monthlyTestQuota?: number;
+	monthlyTestUsed?: number;
+	paygBalance?: number;
+	quotaResetAt?: string;
+	testQuotaResetAt?: string;
+}
+
+export interface AssignUserSubscriptionInput {
+	packageId: string;
+	startDate?: string;
+	endDate?: string;
+	status?: SubStatus;
+	extendDays?: number;
+	resetUsage?: boolean;
 }
 
 export interface OverrideSubscriptionInput {
@@ -519,6 +826,11 @@ export async function listPackagesApi(): Promise<SubscriptionPackage[]> {
 	return body.items ?? [];
 }
 
+export async function getPackageApi(id: string): Promise<SubscriptionPackage> {
+	const response = await apiRequest(`superadmin/packages/${id}`);
+	return (await response.json()) as SubscriptionPackage;
+}
+
 export async function createPackageApi(
 	input: SubscriptionPackageInput
 ): Promise<SubscriptionPackage> {
@@ -569,6 +881,96 @@ export async function overrideSubscriptionApi(
 		jsonInit('PATCH', input)
 	);
 	return (await response.json()) as Subscription;
+}
+
+export async function listUsersApi(query: UserListQuery = {}): Promise<UserListResponse> {
+	const response = await apiRequest(
+		`superadmin/users${toQuery({
+			search: query.search,
+			role: query.role,
+			tier: query.tier,
+			subscriptionStatus: query.subscriptionStatus,
+			emailVerified:
+				query.emailVerified === undefined ? undefined : String(query.emailVerified),
+			onboardingCompleted:
+				query.onboardingCompleted === undefined
+					? undefined
+					: String(query.onboardingCompleted),
+			page: query.page,
+			limit: query.limit
+		})}`
+	);
+	return (await response.json()) as UserListResponse;
+}
+
+export async function getUserStatsApi(): Promise<UserStatsResponse> {
+	const response = await apiRequest('superadmin/users/stats');
+	return (await response.json()) as UserStatsResponse;
+}
+
+export async function getUserDetailApi(userId: string): Promise<UserDetail> {
+	const response = await apiRequest(`superadmin/users/${userId}`);
+	return (await response.json()) as UserDetail;
+}
+
+export async function updateUserRoleApi(
+	userId: string,
+	role: UserRole
+): Promise<UpdateUserRoleResponse> {
+	const response = await apiRequest(
+		`superadmin/users/${userId}/role`,
+		jsonInit('PATCH', { role })
+	);
+	return (await response.json()) as UpdateUserRoleResponse;
+}
+
+export async function getBillingOverviewApi(): Promise<BillingOverviewResponse> {
+	const response = await apiRequest('superadmin/billing/overview');
+	return (await response.json()) as BillingOverviewResponse;
+}
+
+export async function listBillingUsersApi(
+	query: BillingUsersQuery = {}
+): Promise<BillingUsersResponse> {
+	const response = await apiRequest(
+		`superadmin/billing/users${toQuery({
+			search: query.search,
+			billingStatus: query.billingStatus,
+			tier: query.tier,
+			role: query.role,
+			packageId: query.packageId,
+			page: query.page,
+			limit: query.limit
+		})}`
+	);
+	return (await response.json()) as BillingUsersResponse;
+}
+
+export async function getBillingUserDetailApi(userId: string): Promise<BillingUserDetail> {
+	const response = await apiRequest(`superadmin/billing/users/${userId}`);
+	return (await response.json()) as BillingUserDetail;
+}
+
+export async function updateUserQuotasApi(
+	userId: string,
+	input: UpdateUserQuotasInput
+): Promise<BillingUserDetail> {
+	const response = await apiRequest(
+		`superadmin/billing/users/${userId}/quotas`,
+		jsonInit('PATCH', input)
+	);
+	return (await response.json()) as BillingUserDetail;
+}
+
+export async function assignUserSubscriptionApi(
+	userId: string,
+	input: AssignUserSubscriptionInput
+): Promise<BillingUserDetail> {
+	const response = await apiRequest(
+		`superadmin/billing/users/${userId}/subscription`,
+		jsonInit('PUT', input)
+	);
+	return (await response.json()) as BillingUserDetail;
 }
 
 export async function listJobsApi(query: ScrapedJobsQuery = {}): Promise<ScrapedJobsResponse> {

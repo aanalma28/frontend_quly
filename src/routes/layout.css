@@ -57,14 +57,6 @@ html {
 	height: 6px;
 }
 
-.scrollbar-none {
-	scrollbar-width: none;
-}
-
-.scrollbar-none::-webkit-scrollbar {
-	display: none;
-}
-
 /* Dropdown native tetap gelap di Chromium/WebKit. */
 select option {
 	background-color: #0f172a;

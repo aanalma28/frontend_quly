@@ -85,7 +85,12 @@ function readNumber(record: Record<string, unknown>, ...keys: string[]): number 
 
 function unwrapUser(value: unknown): Record<string, unknown> | null {
 	if (!isRecord(value)) return null;
-	if (isRecord(value.user)) return value.user;
+	if (isRecord(value.user)) {
+		const profile = isRecord(value.profile) ? value.profile : {};
+		// `/profile` returns `{ user, profile }`; merge profile fields (tier, quotas,
+		// payg balance) with the identity fields from `user`.
+		return { ...profile, ...value.user };
+	}
 	if (isRecord(value.data)) return unwrapUser(value.data);
 	return value;
 }

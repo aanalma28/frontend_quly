@@ -12,7 +12,24 @@
 		Target,
 		Zap
 	} from '@lucide/svelte';
-	import { creditTopUpPackages, formatRupiah, subscriptionPlans } from '#lib/data/billing.js';
+	import {
+		getPublicBillingPlansApi,
+		type PublicBillingPlan,
+		type TopupPackage
+	} from '#lib/services/billingApi.js';
+	import {
+		billingPeriodLabel,
+		formatNumber,
+		formatRupiah,
+		isUnlimitedQuota,
+		quotaLabel
+	} from '#lib/utils/billing.js';
+
+	let plans = $state<PublicBillingPlan[]>([]);
+	let topupPackages = $state<TopupPackage[]>([]);
+	let paygPrice = $state(500);
+	let plansLoading = $state(true);
+	let plansError = $state<string | null>(null);
 
 	const opportunities = [
 		{ company: 'Nusa Teknologi', role: 'Frontend Developer', match: '92%', initials: 'N', tone: 'blue' },
@@ -69,8 +86,32 @@
 		};
 	}
 
+	function planQuotaText(plan: PublicBillingPlan): string {
+		if (isUnlimitedQuota(plan.quotas.emailApplications) || isUnlimitedQuota(plan.monthlyApplicationQuota)) {
+			return 'Email lamaran tanpa batas';
+		}
+		const suffix = plan.billingPeriod === 'FOREVER' ? '' : ' / bulan';
+		return `${formatNumber(plan.monthlyApplicationQuota)} email lamaran${suffix}`;
+	}
+
+	async function loadPlans() {
+		plansLoading = true;
+		plansError = null;
+		try {
+			const data = await getPublicBillingPlansApi();
+			plans = data.plans;
+			topupPackages = data.topupPackages;
+			paygPrice = data.paygPricePerApplicationIdr;
+		} catch (error) {
+			plansError = error instanceof Error ? error.message : 'Paket belum dapat dimuat.';
+		} finally {
+			plansLoading = false;
+		}
+	}
+
 	onMount(() => {
 		void initializeAuth();
+		void loadPlans();
 		document.documentElement.classList.add('landing-page');
 		return () => document.documentElement.classList.remove('landing-page');
 	});
@@ -248,44 +289,80 @@
 				</p>
 			</div>
 
-			<div class="pricing-grid">
-				{#each subscriptionPlans as plan, index}
-					<article
-						class="pricing-card reveal {plan.recommended ? 'pricing-card-featured' : ''}"
-						use:reveal
-						style:--reveal-delay="{index * 100}ms"
-					>
-						{#if plan.recommended}
-							<span class="pricing-badge"><Sparkles size={12} /> BEST SELLER</span>
-						{/if}
-						<span class="pricing-tier">{plan.tier}</span>
-						<h3>{plan.name}</h3>
-						<p class="pricing-description">{plan.description}</p>
-						<div class="pricing-amount">
-							<strong>{formatRupiah(plan.price)}</strong><span>/{plan.pricePeriod}</span>
-						</div>
-						<div class="pricing-quota"><Mail size={15} /> {plan.quota}</div>
-						<ul>
-							{#each plan.features as feature}
-								<li><Check size={14} /> {feature}</li>
-							{/each}
-						</ul>
-						<a class="pricing-cta {plan.recommended ? 'pricing-cta-featured' : ''}" href="/billing#paket">
-							{plan.id === 'free' ? 'Mulai Berjuang' : 'Pilih Paket Ini'} <ArrowRight size={15} />
-						</a>
-					</article>
-				{/each}
-			</div>
+			{#if plansLoading}
+				<div class="pricing-state">Memuat paket langganan...</div>
+			{:else if plansError}
+				<div class="pricing-state" role="alert">
+					<p>{plansError}</p>
+					<button type="button" onclick={() => void loadPlans()}>Coba lagi</button>
+				</div>
+			{:else if plans.length === 0}
+				<div class="pricing-state">Belum ada paket aktif.</div>
+			{:else}
+				<div class="pricing-grid">
+					{#each plans as plan, index (plan.id)}
+						<article
+							class="pricing-card reveal {plan.isPopular ? 'pricing-card-featured' : ''}"
+							use:reveal
+							style:--reveal-delay="{index * 100}ms"
+						>
+							{#if plan.isPopular}
+								<span class="pricing-badge">
+									<Sparkles size={12} /> {plan.badge ?? 'Paling Populer'}
+								</span>
+							{:else if plan.badge}
+								<span class="pricing-badge"><Sparkles size={12} /> {plan.badge}</span>
+							{/if}
+							<span class="pricing-tier">{plan.tier}</span>
+							<h3>{plan.name}</h3>
+							{#if plan.subtitle}
+								<p class="pricing-description">{plan.subtitle}</p>
+							{/if}
+							<div class="pricing-amount">
+								{#if plan.originalPriceIdr != null && plan.originalPriceIdr > plan.priceIdr}
+									<span class="pricing-original">{formatRupiah(plan.originalPriceIdr)}</span>
+								{/if}
+								<strong>{formatRupiah(plan.priceIdr)}</strong><span>/{billingPeriodLabel(plan.billingPeriod)}</span>
+							</div>
+							<div class="pricing-quota"><Mail size={15} /> {planQuotaText(plan)}</div>
+							<p class="pricing-quota-details">
+								CV {quotaLabel(plan.quotas.cvExtraction, 'x')} · Psikotes
+								{quotaLabel(plan.quotas.psychotest, 'x')} · Scoring
+								{quotaLabel(plan.quotas.jobScoring, 'x')} · Loker luar
+								{quotaLabel(plan.quotas.externalJobExtraction, 'x')} · Token AI
+								{quotaLabel(plan.quotas.aiTokenLimit, 'token')}
+							</p>
+							<ul>
+								{#each plan.features as feature}
+									<li><Check size={14} /> {feature}</li>
+								{/each}
+							</ul>
+							<a
+								class="pricing-cta {plan.isPopular ? 'pricing-cta-featured' : ''}"
+								href="/billing#paket"
+							>
+								{plan.buttonLabel ?? 'Pilih Paket Ini'} <ArrowRight size={15} />
+							</a>
+						</article>
+					{/each}
+				</div>
+			{/if}
 
 			<div class="payg-banner reveal" use:reveal>
 				<div class="payg-icon"><Zap size={19} /></div>
 				<div class="payg-copy">
 					<strong>Kehabisan Kuota Bulanan di Tengah Jalan? Tenang, Pakai Kredit Kilat!</strong>
 					<span>
-						Cukup {formatRupiah(500)} per aksi kirim lamaran otomatis tanpa harus berlangganan
-						bulanan. Pilih {creditTopUpPackages[0].label}: {formatRupiah(creditTopUpPackages[0].amount)}
-						({creditTopUpPackages[0].credits} Token) atau {creditTopUpPackages[1].label}:
-						{formatRupiah(creditTopUpPackages[1].amount)} ({creditTopUpPackages[1].credits} Token).
+						Cukup {formatRupiah(paygPrice)} per aksi kirim lamaran otomatis tanpa harus berlangganan
+						bulanan.
+						{#if topupPackages.length > 0}
+							Pilihan top-up:
+							{topupPackages
+								.map((pack) => `${formatRupiah(pack.amountIdr)} (${pack.tokens} Token)`)
+								.join(' atau ')}.
+						{:else}
+							Top-up belum tersedia.
+						{/if}
 					</span>
 				</div>
 				<a href="/billing#kredit-kilat">Top-up Kredit Kilat <ArrowRight size={15} /></a>
@@ -1196,11 +1273,11 @@
 	}
 
 	.pricing-description {
-		min-height: 35px;
+		min-height: 54px;
 		margin: 7px 0 0;
-		color: #858498;
-		font-size: 10px;
-		line-height: 1.6;
+		color: #737286;
+		font-size: 12px;
+		line-height: 1.55;
 	}
 
 	.pricing-amount {
@@ -1222,6 +1299,40 @@
 		font-size: 10px;
 	}
 
+	.pricing-amount .pricing-original {
+		color: #a5a3b1;
+		font-size: 10px;
+		font-weight: 600;
+		text-decoration: line-through;
+	}
+
+	.pricing-state {
+		margin-top: 18px;
+		padding: 38px 20px;
+		border: 1px dashed #d8d4e8;
+		border-radius: 16px;
+		background: white;
+		color: #858498;
+		font-size: 12px;
+		text-align: center;
+	}
+
+	.pricing-state p {
+		margin: 0;
+	}
+
+	.pricing-state button {
+		margin-top: 12px;
+		padding: 8px 14px;
+		border: 1px solid #d8d4e8;
+		border-radius: 9px;
+		background: white;
+		color: #514d70;
+		font-size: 11px;
+		font-weight: 650;
+		cursor: pointer;
+	}
+
 	.pricing-quota {
 		display: flex;
 		align-items: center;
@@ -1231,13 +1342,20 @@
 		border-radius: 9px;
 		background: #f7f6fb;
 		color: #514d70;
-		font-size: 10px;
+		font-size: 11px;
 		font-weight: 650;
 	}
 
 	.pricing-card-featured .pricing-quota {
 		background: #f3f0ff;
 		color: #5e4bc8;
+	}
+
+	.pricing-quota-details {
+		margin: 6px 1px 0;
+		color: #8c899b;
+		font-size: 10px;
+		line-height: 1.6;
 	}
 
 	.pricing-card ul {
@@ -1251,10 +1369,10 @@
 	.pricing-card li {
 		display: flex;
 		align-items: flex-start;
-		gap: 7px;
-		color: #707084;
-		font-size: 10px;
-		line-height: 1.5;
+		gap: 8px;
+		color: #5f5e73;
+		font-size: 12px;
+		line-height: 1.55;
 	}
 
 	.pricing-card li :global(svg) {
@@ -1592,6 +1710,12 @@
 		}
 		50% {
 			transform: translateY(-7px);
+		}
+	}
+
+	@media (max-width: 1150px) and (min-width: 901px) {
+		.pricing-grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
 	}
 

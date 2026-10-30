@@ -15,17 +15,102 @@
 	} from '@lucide/svelte';
 	import { auth, initializeAuth } from '#lib/stores/auth.js';
 	import {
-		creditTopUpPackages,
+		getPublicBillingPlansApi,
+		subscribePlanApi,
+		type PublicBillingPlan,
+		type TopupPackage
+	} from '#lib/services/billingApi.js';
+	import { tierLabel } from '#lib/components/superadmin/status.js';
+	import {
+		billingPeriodLabel,
+		formatNumber,
 		formatRupiah,
-		subscriptionPlans
-	} from '#lib/data/billing.js';
+		isUnlimitedQuota,
+		quotaLabel
+	} from '#lib/utils/billing.js';
+
+	let plans = $state<PublicBillingPlan[]>([]);
+	let topupPackages = $state<TopupPackage[]>([]);
+	let paygPrice = $state(500);
+	let plansLoading = $state(true);
+	let plansError = $state<string | null>(null);
 
 	let selectedPlanId = $state<string | null>(null);
-	let selectedTopUpId = $state<string | null>(null);
+	let selectedTopUpId = $state<number | null>(null);
 	let topUpRequested = $state(false);
+	let isSubscribing = $state(false);
+	let subscribeMessage = $state<string | null>(null);
+	let subscribeError = $state(false);
+
+	function userTier(): string {
+		return (get(auth).user?.subscriptionTier ?? '').toLowerCase();
+	}
+
+	function isPlanActive(plan: PublicBillingPlan): boolean {
+		const tier = userTier();
+		return [plan.planId, plan.tier, plan.name].some(
+			(value) => tier === value.toLowerCase()
+		);
+	}
+
+	function planQuotaText(plan: PublicBillingPlan): string {
+		if (
+			isUnlimitedQuota(plan.quotas.emailApplications) ||
+			isUnlimitedQuota(plan.monthlyApplicationQuota)
+		) {
+			return 'Email lamaran tanpa batas';
+		}
+		const suffix = plan.billingPeriod === 'FOREVER' ? '' : ' / bulan';
+		return `${formatNumber(plan.monthlyApplicationQuota)} email lamaran${suffix}`;
+	}
+
+	async function loadPlans() {
+		plansLoading = true;
+		plansError = null;
+		try {
+			const data = await getPublicBillingPlansApi();
+			plans = data.plans;
+			topupPackages = data.topupPackages;
+			paygPrice = data.paygPricePerApplicationIdr;
+		} catch (error) {
+			plansError = error instanceof Error ? error.message : 'Paket belum dapat dimuat.';
+		} finally {
+			plansLoading = false;
+		}
+	}
+
+	async function subscribeFree(plan: PublicBillingPlan) {
+		if (isSubscribing || plan.planId !== 'FREE_PLAN') return;
+		isSubscribing = true;
+		subscribeMessage = null;
+		subscribeError = false;
+		try {
+			await subscribePlanApi(plan.planId);
+			await initializeAuth();
+			subscribeMessage = `Paket ${plan.name} berhasil diaktifkan.`;
+			await loadPlans();
+		} catch (error) {
+			subscribeError = true;
+			subscribeMessage =
+				error instanceof Error ? error.message : 'Paket gratis belum dapat diaktifkan.';
+		} finally {
+			isSubscribing = false;
+		}
+	}
+
+	function selectPaidPlan(plan: PublicBillingPlan) {
+		selectedPlanId = plan.id;
+		subscribeError = false;
+		subscribeMessage =
+			'Pembayaran paket berbayar belum tersedia. Superadmin dapat mengaktifkan paket ini secara manual dari Billing Management.';
+	}
+
+	function topupLabel(pack: TopupPackage): string {
+		return pack.amountIdr === 10000 ? 'Paket Hemat' : 'Paket Pejuang';
+	}
 
 	onMount(async () => {
-		const authenticated = await initializeAuth();
+		const [, authenticated] = await Promise.all([loadPlans(), initializeAuth()]);
 		if (!authenticated && !get(auth).error) {
 			await goto('/auth/login?redirectTo=%2Fbilling');
 		}
@@ -88,7 +173,10 @@
 			role="note"
 		>
 			<span class="shrink-0 rounded-md bg-amber-100 px-2 py-0.5 font-bold">INFO</span>
-			<span>Pembayaran paket dan top-up belum terhubung ke backend.</span>
+			<span>
+				Free Plan dapat diaktifkan langsung. Pembayaran paket berbayar dan top-up belum terhubung ke
+				payment provider.
+			</span>
 		</div>
 		<div class="mx-auto mt-3 flex max-w-2xl flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-slate-500">
 			<span>{$auth.user.fullName} · {$auth.user.email}</span>
@@ -113,110 +201,155 @@
 				<span class="hidden text-xs text-slate-500 sm:block">Tanpa biaya tersembunyi</span>
 			</div>
 
-			<div class="grid items-stretch gap-5 md:grid-cols-2 xl:grid-cols-4">
-				{#each subscriptionPlans as plan}
-					{@const userTier = ($auth.user.subscriptionTier ?? '').toLowerCase()}
-					{@const isActive = [plan.id, plan.tier, plan.name].some((tier) => userTier === tier.toLowerCase())}
-					{@const isSelected = selectedPlanId === plan.id}
-					<article
-						class="relative flex flex-col rounded-2xl border bg-white p-5 shadow-sm transition sm:p-6 {plan.recommended
-							? 'border-indigo-500 shadow-indigo-100/80 lg:-translate-y-2'
-							: 'border-slate-200'}"
+			{#if plansLoading}
+				<div class="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500">
+					Memuat paket langganan...
+				</div>
+			{:else if plansError}
+				<div class="rounded-2xl border border-dashed border-rose-200 bg-white px-4 py-10 text-center">
+					<p class="text-sm text-rose-700" role="alert">{plansError}</p>
+					<button
+						type="button"
+						onclick={() => void loadPlans()}
+						class="mt-3 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700"
 					>
-						{#if plan.recommended}
-							<div
-								class="absolute -top-3 left-1/2 inline-flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full bg-indigo-600 px-3 py-1 text-[10px] font-bold text-white shadow-sm"
-							>
-								<Crown size={12} /> BEST SELLER
-							</div>
-						{/if}
-
-						<div class="flex items-start justify-between gap-3">
-							<div>
-								<p class="text-xs font-semibold text-indigo-600">{plan.tier}</p>
-								<h3 class="mt-1 text-lg font-bold text-slate-950">{plan.name}</h3>
-							</div>
-							<span
-								class="flex size-10 shrink-0 items-center justify-center rounded-xl {plan.recommended
-									? 'bg-indigo-50 text-indigo-600'
-									: 'bg-slate-100 text-slate-500'}"
-							>
-								{#if plan.recommended}
-									<Crown size={19} />
-								{:else if plan.id === 'unlimited'}
-									<Sparkles size={19} />
-								{:else}
-									<Mail size={19} />
-								{/if}
-							</span>
-						</div>
-						<p class="mt-3 min-h-10 text-xs leading-5 text-slate-500">{plan.description}</p>
-
-						<div class="mt-5 flex items-baseline gap-1">
-							<strong class="text-3xl font-bold tracking-tight text-slate-950">
-								{formatRupiah(plan.price)}
-							</strong>
-							<span class="text-xs text-slate-500">/{plan.pricePeriod}</span>
-						</div>
-
-						<div class="mt-4 flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5">
-							<span
-								class="flex size-7 items-center justify-center rounded-lg {plan.recommended
-									? 'bg-indigo-100 text-indigo-700'
-									: 'bg-white text-slate-600'}"
-							>
-								<Mail size={14} />
-							</span>
-							<span class="text-xs font-semibold text-slate-700">{plan.quota}</span>
-						</div>
-
-						<ul class="mt-5 grid gap-3">
-							{#each plan.features as feature}
-								<li class="flex items-start gap-2.5 text-xs leading-5 text-slate-600">
-									<span
-										class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full {plan.recommended
-											? 'bg-indigo-100 text-indigo-700'
-											: 'bg-emerald-50 text-emerald-600'}"
-									>
-										<Check size={11} strokeWidth={2.8} />
-									</span>
-									{feature}
-								</li>
-							{/each}
-						</ul>
-
-						<div class="mt-auto pt-6">
-							{#if isActive}
-								<button
-									type="button"
-									disabled
-									class="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 text-sm font-semibold text-indigo-700"
+						Coba lagi
+					</button>
+				</div>
+			{:else if plans.length === 0}
+				<div class="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500">
+					Belum ada paket aktif.
+				</div>
+			{:else}
+				<div class="grid items-stretch gap-5 md:grid-cols-2 xl:grid-cols-4">
+					{#each plans as plan}
+						{@const isActive = isPlanActive(plan)}
+						{@const isSelected = selectedPlanId === plan.id}
+						<article
+							class="relative flex flex-col rounded-2xl border bg-white p-5 shadow-sm transition sm:p-6 {plan.isPopular
+								? 'border-indigo-500 shadow-indigo-100/80 lg:-translate-y-2'
+								: 'border-slate-200'}"
+						>
+							{#if plan.isPopular || plan.badge}
+								<div
+									class="absolute -top-3 left-1/2 inline-flex max-w-[90%] -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full bg-indigo-600 px-3 py-1 text-[10px] font-bold text-white shadow-sm"
 								>
-									<Check size={16} /> Paket aktif
-								</button>
-							{:else}
-								<button
-									type="button"
-									onclick={() => (selectedPlanId = plan.id)}
-									class="flex h-11 w-full items-center justify-center gap-2 rounded-xl border text-sm font-semibold transition {plan.recommended
-										? 'border-indigo-600 bg-indigo-600 text-white shadow-sm shadow-indigo-200 hover:bg-indigo-700'
-										: 'border-slate-200 bg-white text-slate-700 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700'}"
-								>
-									{isSelected
-										? 'Dipilih untuk upgrade'
-										: plan.id === 'free'
-											? 'Mulai Berjuang'
-											: 'Pilih Paket Ini'}
-									<ArrowRight size={15} />
-								</button>
+									<Crown size={12} /> {plan.badge ?? 'PALING POPULER'}
+								</div>
 							{/if}
-						</div>
-					</article>
-				{/each}
-			</div>
-			{#if selectedPlanId}
-				<p class="mt-4 text-center text-xs text-indigo-700" role="status">
-					Paket dipilih. Aktivasi akan tersedia setelah integrasi pembayaran.
+
+							<div class="flex items-start justify-between gap-3">
+								<div class="min-w-0">
+									<p class="text-xs font-semibold text-indigo-600">{tierLabel[plan.tier]}</p>
+									<h3 class="mt-1 text-lg font-bold text-slate-950">{plan.name}</h3>
+								</div>
+								<span
+									class="flex size-10 shrink-0 items-center justify-center rounded-xl {plan.isPopular
+										? 'bg-indigo-50 text-indigo-600'
+										: 'bg-slate-100 text-slate-500'}"
+								>
+									{#if plan.isPopular}
+										<Crown size={19} />
+									{:else if plan.tier === 'UNLIMITED'}
+										<Sparkles size={19} />
+									{:else}
+										<Mail size={19} />
+									{/if}
+								</span>
+							</div>
+							{#if plan.subtitle}
+								<p class="mt-3 min-h-10 text-xs leading-5 text-slate-500">{plan.subtitle}</p>
+							{/if}
+
+							<div class="mt-5 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+								{#if plan.originalPriceIdr != null && plan.originalPriceIdr > plan.priceIdr}
+									<span class="text-xs font-medium text-slate-400 line-through">
+										{formatRupiah(plan.originalPriceIdr)}
+									</span>
+								{/if}
+								<strong class="text-3xl font-bold tracking-tight text-slate-950">
+									{formatRupiah(plan.priceIdr)}
+								</strong>
+								<span class="text-xs text-slate-500">/{billingPeriodLabel(plan.billingPeriod)}</span>
+							</div>
+
+							<div class="mt-4 flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5">
+								<span
+									class="flex size-7 items-center justify-center rounded-lg {plan.isPopular
+										? 'bg-indigo-100 text-indigo-700'
+										: 'bg-white text-slate-600'}"
+								>
+									<Mail size={14} />
+								</span>
+								<span class="text-xs font-semibold text-slate-700">{planQuotaText(plan)}</span>
+							</div>
+							<div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-slate-500">
+								<span>CV {quotaLabel(plan.quotas.cvExtraction, 'x')}</span>
+								<span>Psikotes {quotaLabel(plan.quotas.psychotest, 'x')}</span>
+								<span>Scoring {quotaLabel(plan.quotas.jobScoring, 'x')}</span>
+								<span>Loker luar {quotaLabel(plan.quotas.externalJobExtraction, 'x')}</span>
+								<span class="col-span-2">Token AI {quotaLabel(plan.quotas.aiTokenLimit, 'token')}</span>
+							</div>
+
+							<ul class="mt-5 grid gap-3">
+								{#each plan.features as feature}
+									<li class="flex items-start gap-2.5 text-xs leading-5 text-slate-600">
+										<span
+											class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full {plan.isPopular
+												? 'bg-indigo-100 text-indigo-700'
+												: 'bg-emerald-50 text-emerald-600'}"
+										>
+											<Check size={11} strokeWidth={2.8} />
+										</span>
+										{feature}
+									</li>
+								{/each}
+							</ul>
+
+							<div class="mt-auto pt-6">
+								{#if isActive}
+									<button
+										type="button"
+										disabled
+										class="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 text-sm font-semibold text-indigo-700"
+									>
+										<Check size={16} /> Paket aktif
+									</button>
+								{:else}
+									<button
+										type="button"
+										onclick={() => {
+											if (plan.planId === 'FREE_PLAN') {
+												void subscribeFree(plan);
+											} else {
+												selectPaidPlan(plan);
+											}
+										}}
+										disabled={isSubscribing}
+										class="flex h-11 w-full items-center justify-center gap-2 rounded-xl border text-sm font-semibold transition {plan.isPopular
+											? 'border-indigo-600 bg-indigo-600 text-white shadow-sm shadow-indigo-200 hover:bg-indigo-700'
+											: 'border-slate-200 bg-white text-slate-700 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700'} disabled:cursor-not-allowed disabled:opacity-60"
+									>
+										{isSubscribing && plan.planId === 'FREE_PLAN'
+											? 'Mengaktifkan...'
+											: isSelected
+												? 'Dipilih untuk upgrade'
+												: (plan.buttonLabel ?? 'Pilih Paket Ini')}
+										<ArrowRight size={15} />
+									</button>
+								{/if}
+							</div>
+						</article>
+					{/each}
+				</div>
+			{/if}
+
+			{#if subscribeMessage}
+				<p
+					class="mt-4 text-center text-xs {subscribeError ? 'text-rose-700' : 'text-indigo-700'}"
+					role={subscribeError ? 'alert' : 'status'}
+				>
+					{subscribeMessage}
 				</p>
 			{/if}
 		</section>
@@ -241,11 +374,11 @@
 							Kehabisan Kuota Bulanan di Tengah Jalan? Tenang, Pakai Kredit Kilat!
 						</h2>
 						<p class="mt-2 max-w-sm text-xs leading-5 text-slate-300">
-							Cukup {formatRupiah(500)} per aksi kirim lamaran otomatis tanpa harus berlangganan
+							Cukup {formatRupiah(paygPrice)} per aksi kirim lamaran otomatis tanpa harus berlangganan
 							bulanan.
 						</p>
 						<div class="mt-6 flex items-end gap-2">
-							<strong class="text-3xl font-bold">{formatRupiah(500)}</strong>
+							<strong class="text-3xl font-bold">{formatRupiah(paygPrice)}</strong>
 							<span class="pb-1 text-xs text-slate-300">/ 1 aksi kirim lamaran</span>
 						</div>
 						<div class="mt-5 flex items-center gap-2 text-[11px] text-slate-300">
@@ -267,35 +400,34 @@
 						</span>
 					</div>
 
-					<div class="mt-5 grid gap-3 sm:grid-cols-2">
-						{#each creditTopUpPackages as pack}
-							{@const isSelected = selectedTopUpId === pack.id}
-							<button
-								type="button"
-								aria-pressed={isSelected}
-								onclick={() => {
-									selectedTopUpId = pack.id;
-									topUpRequested = false;
-								}}
-								class="relative rounded-xl border p-3 text-left transition {isSelected
-									? 'border-violet-500 bg-violet-50 ring-2 ring-violet-100'
-									: 'border-slate-200 bg-white hover:border-violet-200 hover:bg-violet-50/50'}"
-							>
-								{#if pack.bonus}
-									<span
-										class="absolute -top-2 right-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[8px] font-bold text-emerald-700"
-									>
-										{pack.bonus}
-									</span>
-								{/if}
-								<span class="block text-[10px] font-semibold text-slate-500">{pack.label}</span>
-								<strong class="mt-1 block text-sm font-bold text-slate-900">
-									{formatRupiah(pack.amount)}
-								</strong>
-								<span class="mt-1 block text-[10px] text-slate-500">{pack.credits} Token</span>
-							</button>
-						{/each}
-					</div>
+					{#if topupPackages.length === 0}
+						<p class="mt-5 rounded-xl border border-dashed border-slate-200 px-3 py-4 text-xs text-slate-500">
+							Top-up Kredit Kilat belum tersedia.
+						</p>
+					{:else}
+						<div class="mt-5 grid gap-3 sm:grid-cols-2">
+							{#each topupPackages as pack}
+								{@const isSelected = selectedTopUpId === pack.amountIdr}
+								<button
+									type="button"
+									aria-pressed={isSelected}
+									onclick={() => {
+										selectedTopUpId = pack.amountIdr;
+										topUpRequested = false;
+									}}
+									class="relative rounded-xl border p-3 text-left transition {isSelected
+										? 'border-violet-500 bg-violet-50 ring-2 ring-violet-100'
+										: 'border-slate-200 bg-white hover:border-violet-200 hover:bg-violet-50/50'}"
+								>
+									<span class="block text-[10px] font-semibold text-slate-500">{topupLabel(pack)}</span>
+									<strong class="mt-1 block text-sm font-bold text-slate-900">
+										{formatRupiah(pack.amountIdr)}
+									</strong>
+									<span class="mt-1 block text-[10px] text-slate-500">{pack.tokens} Token</span>
+								</button>
+							{/each}
+						</div>
+					{/if}
 
 					<div class="mt-5 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
 						<button
