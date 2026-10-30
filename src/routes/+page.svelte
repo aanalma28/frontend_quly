@@ -18,6 +18,7 @@
 		type PublicBillingPlan,
 		type TopupPackage
 	} from '#lib/services/billingApi.js';
+	import RichText from '#lib/components/superadmin/RichText.svelte';
 	import {
 		billingPeriodLabel,
 		formatNumber,
@@ -352,7 +353,7 @@
 							<div class="pricing-quota"><Mail size={15} /> {planQuotaText(plan)}</div>
 							<ul>
 								{#each plan.features.slice(0, 3) as feature}
-									<li><Check size={14} /> {feature}</li>
+									<li><Check size={14} /> <RichText html={feature} /></li>
 								{/each}
 							</ul>
 							<button type="button" class="pricing-more" onclick={() => openPlan(plan)}>
@@ -534,7 +535,7 @@
 				{#if detailPlan.features.length > 0}
 					<ul>
 						{#each detailPlan.features as feature}
-							<li><Check size={14} /> {feature}</li>
+							<li><Check size={14} /> <RichText html={feature} /></li>
 						{/each}
 					</ul>
 				{:else}

@@ -17,22 +17,55 @@
 		Users
 	} from '@lucide/svelte';
 	import { auth, getUserRole, initializeAuth, logout } from '#lib/stores/auth.js';
+	import type { Component } from 'svelte';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
 
 	let checking = $state(true);
 
-	const navigation = [
-		{ label: 'Executive Overview', href: '/superadmin', icon: LayoutDashboard, exact: true },
-		{ label: 'Live Job Ingestion & Audit', href: '/superadmin/jobs', icon: Rss },
-		{ label: 'Job Statistics', href: '/superadmin/job-statistics', icon: ChartColumn },
-		{ label: 'Ingestion Sources', href: '/superadmin/sources', icon: Plug },
-		{ label: 'Scraper Runs', href: '/superadmin/scraper-runs', icon: ListChecks },
-		{ label: 'User Management', href: '/superadmin/users', icon: Users },
-		{ label: 'Billing Management', href: '/superadmin/billing', icon: CreditCard },
-		{ label: 'Subscription Packages', href: '/superadmin/packages', icon: Boxes },
-		{ label: 'AI Cost & Token Analytics', href: '/superadmin/ai-analytics', icon: Bot }
+	interface NavItem {
+		label: string;
+		href: string;
+		icon: Component;
+		exact?: boolean;
+	}
+
+	const navigationGroups: Array<{ label: string; items: NavItem[] }> = [
+		{
+			label: 'Overview',
+			items: [
+				{
+					label: 'Executive Overview',
+					href: '/superadmin',
+					icon: LayoutDashboard,
+					exact: true
+				}
+			]
+		},
+		{
+			label: 'Job Operations',
+			items: [
+				{ label: 'Live Job Ingestion & Audit', href: '/superadmin/jobs', icon: Rss },
+				{ label: 'Job Statistics', href: '/superadmin/job-statistics', icon: ChartColumn },
+				{ label: 'Ingestion Sources', href: '/superadmin/sources', icon: Plug },
+				{ label: 'Scraper Runs', href: '/superadmin/scraper-runs', icon: ListChecks }
+			]
+		},
+		{
+			label: 'Users & Billing',
+			items: [
+				{ label: 'User Management', href: '/superadmin/users', icon: Users },
+				{ label: 'Billing Management', href: '/superadmin/billing', icon: CreditCard },
+				{ label: 'Subscription Packages', href: '/superadmin/packages', icon: Boxes }
+			]
+		},
+		{
+			label: 'AI Operations',
+			items: [
+				{ label: 'AI Cost & Token Analytics', href: '/superadmin/ai-analytics', icon: Bot }
+			]
+		}
 	];
 
 	function isActive(href: string, exact = false) {
@@ -84,27 +117,37 @@
 				</span>
 			</a>
 
-			<p class="mt-7 px-2 text-[11px] font-bold uppercase tracking-[0.15em] text-slate-600 md:mt-9">
-				Control Center
-			</p>
 			<nav
 				aria-label="Menu superadmin"
-				class="mt-3 flex gap-2 overflow-x-auto pb-1 md:min-h-0 md:flex-1 md:flex-col md:gap-1 md:overflow-y-auto md:pr-1"
+				class="mt-4 flex gap-2 overflow-x-auto pb-1 md:min-h-0 md:flex-1 md:flex-col md:gap-0 md:overflow-y-auto md:pr-1"
 			>
-				{#each navigation as item}
-					<a
-						href={item.href}
-						aria-current={isActive(item.href, item.exact) ? 'page' : undefined}
-						class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium leading-snug transition md:w-full {isActive(
-							item.href,
-							item.exact
-						)
-							? 'bg-indigo-500/15 text-indigo-200 ring-1 ring-inset ring-indigo-500/20'
-							: 'text-slate-400 hover:bg-white/5 hover:text-white'}"
+				{#each navigationGroups as group, groupIndex}
+					<div
+						class="flex shrink-0 items-center gap-2 md:flex-col md:items-stretch md:gap-1 {groupIndex > 0
+							? 'md:mt-4'
+							: ''}"
 					>
-						<item.icon size={18} strokeWidth={1.8} />
-						{item.label}
-					</a>
+						<p
+							class="px-2 text-[9px] font-bold uppercase tracking-[0.12em] text-slate-600 md:px-3 md:pb-1 md:text-[10px] md:tracking-[0.15em]"
+						>
+							{group.label}
+						</p>
+						{#each group.items as item}
+							<a
+								href={item.href}
+								aria-current={isActive(item.href, item.exact) ? 'page' : undefined}
+								class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium leading-snug transition md:w-full {isActive(
+									item.href,
+									item.exact
+								)
+									? 'bg-indigo-500/15 text-indigo-200 ring-1 ring-inset ring-indigo-500/20'
+									: 'text-slate-400 hover:bg-white/5 hover:text-white'}"
+							>
+								<item.icon size={18} strokeWidth={1.8} />
+								{item.label}
+							</a>
+						{/each}
+					</div>
 				{/each}
 			</nav>
 

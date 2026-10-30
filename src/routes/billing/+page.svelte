@@ -21,6 +21,7 @@
 		type TopupPackage
 	} from '#lib/services/billingApi.js';
 	import { tierLabel } from '#lib/components/superadmin/status.js';
+	import RichText from '#lib/components/superadmin/RichText.svelte';
 	import {
 		billingPeriodLabel,
 		formatNumber,
@@ -301,7 +302,7 @@
 										>
 											<Check size={11} strokeWidth={2.8} />
 										</span>
-										{feature}
+										<RichText html={feature} />
 									</li>
 								{/each}
 							</ul>

@@ -16,6 +16,8 @@
 	import Alert from '#lib/components/superadmin/Alert.svelte';
 	import Modal from '#lib/components/superadmin/Modal.svelte';
 	import { formatDateShort, formatNumber } from '#lib/components/superadmin/format.js';
+	import RichText from '#lib/components/superadmin/RichText.svelte';
+	import RichTextEditor from '#lib/components/superadmin/RichTextEditor.svelte';
 	import { tierLabel, tierTone } from '#lib/components/superadmin/status.js';
 	import {
 		createPackageApi,
@@ -33,6 +35,7 @@
 		formatRupiah,
 		quotaLabel
 	} from '#lib/utils/billing.js';
+	import { isEmptyRichText, sanitizeRichText } from '#lib/utils/richText.js';
 
 	const inputClass =
 		'w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30';
@@ -71,7 +74,7 @@
 	let formJobScoring = $state('0');
 	let formExternalJob = $state('0');
 	let formEmailApplications = $state('0');
-	let formFeatures = $state('');
+	let formFeatureItems = $state<Array<{ id: string; html: string }>>([]);
 	let formActive = $state(true);
 	let isSaving = $state(false);
 	let formError = $state<string | null>(null);
@@ -82,6 +85,27 @@
 
 	function errorText(error: unknown, fallback: string): string {
 		return error instanceof Error ? error.message : fallback;
+	}
+
+	function featureId(): string {
+		if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+			return crypto.randomUUID();
+		}
+		return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+	}
+
+	function addFeature() {
+		formFeatureItems = [...formFeatureItems, { id: featureId(), html: '' }];
+	}
+
+	function updateFeature(id: string, html: string) {
+		formFeatureItems = formFeatureItems.map((item) =>
+			item.id === id ? { ...item, html } : item
+		);
+	}
+
+	function removeFeature(id: string) {
+		formFeatureItems = formFeatureItems.filter((item) => item.id !== id);
 	}
 
 	function integerValue(
@@ -129,7 +153,7 @@
 		formJobScoring = '0';
 		formExternalJob = '0';
 		formEmailApplications = '0';
-		formFeatures = '';
+		formFeatureItems = [{ id: featureId(), html: '' }];
 		formActive = true;
 		formError = null;
 		modalOpen = true;
@@ -154,7 +178,13 @@
 		formJobScoring = String(pkg.quotas.jobScoring);
 		formExternalJob = String(pkg.quotas.externalJobExtraction);
 		formEmailApplications = String(pkg.quotas.emailApplications);
-		formFeatures = pkg.features.join('\n');
+		formFeatureItems =
+			pkg.features.length > 0
+				? pkg.features.map((feature) => ({
+						id: featureId(),
+						html: sanitizeRichText(feature)
+					}))
+				: [{ id: featureId(), html: '' }];
 		formActive = pkg.isActive;
 		formError = null;
 		modalOpen = true;
@@ -247,10 +277,9 @@
 			return;
 		}
 
-		const features = formFeatures
-			.split('\n')
-			.map((line) => line.trim())
-			.filter(Boolean);
+		const features = formFeatureItems
+			.map((item) => sanitizeRichText(item.html))
+			.filter((html) => !isEmptyRichText(html));
 
 		const payload: SubscriptionPackageInput = {
 			name,
@@ -495,7 +524,8 @@
 						<ul class="mt-3 space-y-1.5">
 							{#each pkg.features.slice(0, 3) as feature}
 								<li class="flex items-start gap-1.5 text-[11px] leading-4 text-slate-400">
-									<Check size={11} class="mt-0.5 shrink-0 text-emerald-400" /> {feature}
+									<Check size={11} class="mt-0.5 shrink-0 text-emerald-400" />
+									<span class="min-w-0"><RichText html={feature} /></span>
 								</li>
 							{/each}
 							{#if pkg.features.length > 3}
@@ -646,16 +676,53 @@
 			</div>
 		</div>
 
-		<label class="block space-y-1.5 text-sm font-medium text-slate-300">
-			Fitur paket
-			<textarea
-				bind:value={formFeatures}
-				rows="5"
-				placeholder="Satu baris = satu fitur"
-				class="{inputClass} resize-y"
-			></textarea>
-			<p class="text-[10px] font-normal text-slate-500">Pisahkan setiap fitur dengan enter.</p>
-		</label>
+		<div class="space-y-2">
+			<div class="flex flex-wrap items-start justify-between gap-2">
+				<div>
+					<p class="text-sm font-medium text-slate-300">Fitur paket</p>
+					<p class="mt-0.5 text-[11px] text-slate-500">
+						Pilih teks lalu gunakan tombol <strong class="text-slate-300">B</strong>,
+						<em class="text-slate-300">I</em>, <u class="text-slate-300">U</u>, atau coret.
+					</p>
+				</div>
+				<button
+					type="button"
+					onclick={addFeature}
+					class="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-slate-700 px-2.5 text-xs font-semibold text-slate-300 transition hover:bg-slate-800"
+				>
+					<Plus size={14} /> Tambah Fitur
+				</button>
+			</div>
+
+			<div class="space-y-2">
+				{#each formFeatureItems as item, index (item.id)}
+					<div class="flex items-start gap-2">
+						<div class="min-w-0 flex-1">
+							<RichTextEditor
+								value={item.html}
+								onchange={(html) => updateFeature(item.id, html)}
+								placeholder={`Fitur ${index + 1}`}
+							/>
+						</div>
+						<button
+							type="button"
+							onclick={() => removeFeature(item.id)}
+							aria-label="Hapus fitur"
+							class="mt-1 rounded-lg p-2 text-slate-500 transition hover:bg-rose-500/10 hover:text-rose-300"
+						>
+							<Trash2 size={14} />
+						</button>
+					</div>
+				{/each}
+				{#if formFeatureItems.length === 0}
+					<p
+						class="rounded-lg border border-dashed border-slate-700 px-3 py-4 text-center text-xs text-slate-500"
+					>
+						Belum ada fitur. Klik "Tambah Fitur".
+					</p>
+				{/if}
+			</div>
+		</div>
 
 		{#if formBadge}
 			<div class="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/40 p-3 text-[11px] text-slate-400">
