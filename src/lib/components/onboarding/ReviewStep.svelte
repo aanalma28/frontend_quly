@@ -1,6 +1,9 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { ArrowLeft, ArrowRight, BriefcaseBusiness, ChevronDown, GraduationCap, Plus, Trash2 } from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
+	import { getMyBenefitsApi, type UserBenefitQuota } from '#lib/services/billingApi.js';
+	import { formatRupiah, isUnlimitedQuota } from '#lib/utils/billing.js';
 	import {
 		onboarding,
 		backToUpload,
@@ -23,6 +26,32 @@
 	const additional = $derived<AdditionalFormData>($onboarding.additionalFormData);
 	const atsQuota = $derived($onboarding.atsQuota);
 	const atsQuotaExhausted = $derived(atsQuota !== null && atsQuota.remaining === 0);
+
+	let cvBenefit = $state<UserBenefitQuota | null>(null);
+	let benefitQuotaLoading = $state(true);
+
+	onMount(async () => {
+		try {
+			const data = await getMyBenefitsApi();
+			cvBenefit = data.benefits.find((benefit) => benefit.code === 'CV_EXTRACTION') ?? null;
+		} catch {
+			cvBenefit = null;
+		} finally {
+			benefitQuotaLoading = false;
+		}
+	});
+
+	const benefitQuotaExhausted = $derived(
+		cvBenefit !== null && !isUnlimitedQuota(cvBenefit.limit) && cvBenefit.remaining <= 0
+	);
+	const usingCredit = $derived(
+		benefitQuotaExhausted &&
+			(cvBenefit?.creditCost ?? 0) > 0 &&
+			Boolean(cvBenefit?.canUseWithCredit)
+	);
+	const quotaBlocked = $derived(
+		cvBenefit ? benefitQuotaExhausted && !usingCredit : atsQuotaExhausted
+	);
 
 	const atsStyleOptions: { value: AtsStyle; label: string; description: string }[] = [
 		{
@@ -156,7 +185,7 @@
 	function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
 		validationAttempted = true;
-		if (fullNameError || phoneError || atsQuotaExhausted) return;
+		if (fullNameError || phoneError || quotaBlocked) return;
 		void submit();
 	}
 
@@ -495,12 +524,27 @@
 		</details>
 	{/if}
 
-	{#if atsQuotaExhausted}
-		<div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-			Kuota Generate ATS Anda habis. Silakan
-			<a href="/billing#paket" class="font-semibold underline">upgrade</a>
-			untuk melanjutkan.
-		</div>
+	{#if !benefitQuotaLoading}
+		{#if usingCredit && cvBenefit}
+			<div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+				Kuota Generate CV habis. Generate ini akan memakai
+				<strong>{cvBenefit.creditCost} kredit</strong>
+				(± {formatRupiah(cvBenefit.overageCostIdr)}). Anda tetap bisa melanjutkan atau
+				<a href="/billing#kredit-kilat" class="font-semibold underline">top-up kredit</a>.
+			</div>
+		{:else if quotaBlocked}
+			<div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+				Kuota Generate CV habis dan saldo kredit tidak mencukupi. Silakan
+				<a href="/billing#kredit-kilat" class="font-semibold underline">top-up kredit</a>
+				terlebih dahulu.
+			</div>
+		{:else if cvBenefit === null && atsQuotaExhausted}
+			<div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+				Kuota Generate ATS Anda habis. Silakan
+				<a href="/billing#paket" class="font-semibold underline">upgrade</a>
+				untuk melanjutkan.
+			</div>
+		{/if}
 	{/if}
 
 	<div class="flex flex-wrap items-center justify-between gap-3 pb-3">
@@ -513,7 +557,16 @@
 			Kembali
 		</button>
 		<div class="flex items-center gap-3">
-			{#if atsQuota}
+			{#if cvBenefit}
+				<p class="text-xs text-slate-500">
+					Kuota Generate CV:
+					<span class="font-semibold text-slate-700">
+						{isUnlimitedQuota(cvBenefit.limit)
+							? 'Tanpa batas'
+							: `${Math.max(cvBenefit.remaining, 0)}/${cvBenefit.limit}`}
+					</span>
+				</p>
+			{:else if atsQuota}
 				<p class="text-xs text-slate-500">
 					Kuota Generate ATS:
 					<span class="font-semibold text-slate-700">
@@ -523,7 +576,7 @@
 			{/if}
 			<button
 				type="submit"
-				disabled={$onboarding.isSubmitting || $onboarding.isParsing || atsQuotaExhausted}
+				disabled={$onboarding.isSubmitting || $onboarding.isParsing || quotaBlocked}
 				class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
 			>
 				{#if $onboarding.isSubmitting}<Spinner label="Menyimpan profil" />{/if}

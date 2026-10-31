@@ -13,7 +13,8 @@ export class ApiError extends Error {
 	constructor(
 		message: string,
 		public readonly status: number,
-		public readonly code?: string
+		public readonly code?: string,
+		public readonly payload?: unknown
 	) {
 		super(message);
 		this.name = 'ApiError';
@@ -66,8 +67,10 @@ function fetchWithToken(
 async function parseApiError(response: Response): Promise<ApiError> {
 	let message = `Permintaan gagal (${response.status}).`;
 	let code: string | undefined;
+	let payload: unknown;
 	try {
 		const body: unknown = await response.clone().json();
+		payload = body;
 		if (typeof body === 'object' && body !== null) {
 			const details = body as { message?: unknown; error?: unknown; code?: unknown };
 			const serverMessage = details.message ?? details.error;
@@ -78,8 +81,9 @@ async function parseApiError(response: Response): Promise<ApiError> {
 	} catch {
 		const responseMessage = await response.text();
 		if (responseMessage) message = responseMessage;
+		payload = responseMessage || undefined;
 	}
-	return new ApiError(message, response.status, code);
+	return new ApiError(message, response.status, code, payload);
 }
 
 function extractTokens(value: unknown): {

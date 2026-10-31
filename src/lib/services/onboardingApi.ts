@@ -99,6 +99,14 @@ export interface OnboardingProfileResponse {
 	atsQuota: QuotaSummary;
 }
 
+export interface CvScore {
+	overallScore: number;
+	summary?: string;
+	strengths: string[];
+	weaknesses: string[];
+	suggestions: string[];
+}
+
 /** Result of `POST /onboarding/submit` (contains the generated ATS CV). */
 export interface SubmitOnboardingResult {
 	success?: boolean;

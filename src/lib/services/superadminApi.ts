@@ -36,7 +36,12 @@ export type IngestionPaginationType =
 	| 'DEFAULT';
 export type ApplicationType = 'EMAIL' | 'WEBSITE_PORTAL' | 'WHATSAPP' | 'TELEGRAM';
 export type WorkplaceType = 'REMOTE' | 'WFO' | 'HYBRID';
-export type EmploymentType = 'FULL_TIME' | 'CONTRACT' | 'FREELANCE' | 'INTERNSHIP';
+export type EmploymentType =
+	| 'FULL_TIME'
+	| 'PART_TIME'
+	| 'CONTRACT'
+	| 'FREELANCE'
+	| 'INTERNSHIP';
 
 export interface PackageQuotas {
 	cvExtraction: number;

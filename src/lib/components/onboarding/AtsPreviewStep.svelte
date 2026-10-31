@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { ArrowRight, CheckCircle2, Download } from '@lucide/svelte';
 	import { goto } from '$app/navigation';
+	import CvScoreCard from '#lib/components/onboarding/CvScoreCard.svelte';
 	import { onboarding, backToUpload } from '#lib/stores/onboardingStore.js';
+	import type { CvScore } from '#lib/services/onboardingApi.js';
 
 	interface AtsBasics {
 		fullName?: string;
@@ -50,6 +52,7 @@
 		education?: AtsEducation[];
 		skills?: AtsSkills;
 		certifications?: AtsCertification[];
+		score?: CvScore;
 	}
 
 	const result = $derived($onboarding.atsResult);
@@ -59,6 +62,9 @@
 			: null
 	);
 
+	const score = $derived<CvScore | null>(
+		ats?.score && typeof ats.score.overallScore === 'number' ? ats.score : null
+	);
 	const basics = $derived<AtsBasics>(ats?.basics ?? {});
 	const experiences = $derived<AtsExperience[]>(ats?.experiences ?? []);
 	const educations = $derived<AtsEducation[]>(ats?.education ?? []);
@@ -104,6 +110,10 @@
 			</div>
 		</div>
 	</div>
+
+	{#if score}
+		<CvScoreCard {score} />
+	{/if}
 
 	<!-- Dokumen CV ATS (yang akan dicetak / diunduh sebagai PDF) -->
 	<article

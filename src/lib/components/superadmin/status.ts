@@ -148,6 +148,7 @@ export const workplaceTypeLabel: Record<WorkplaceType, string> = {
 
 export const employmentTypeLabel: Record<EmploymentType, string> = {
 	FULL_TIME: 'Full Time',
+	PART_TIME: 'Part Time',
 	CONTRACT: 'Contract',
 	FREELANCE: 'Freelance',
 	INTERNSHIP: 'Internship'

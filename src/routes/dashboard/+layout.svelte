@@ -50,6 +50,17 @@
 		}
 	}
 
+	onMount(() => {
+		const handleBenefitsUpdated = (event: Event) => {
+			const detail = (event as CustomEvent<{ creditBalance?: unknown }>).detail;
+			if (typeof detail?.creditBalance === 'number') {
+				creditBalance = detail.creditBalance;
+			}
+		};
+		window.addEventListener('benefits:updated', handleBenefitsUpdated);
+		return () => window.removeEventListener('benefits:updated', handleBenefitsUpdated);
+	});
+
 	onMount(async () => {
 		const authenticated = await initializeAuth();
 		if (!authenticated && !get(auth).error) {

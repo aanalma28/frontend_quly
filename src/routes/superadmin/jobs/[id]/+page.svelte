@@ -78,7 +78,13 @@
 	let lightboxOpen = $state(false);
 
 	const workplaceTypes: WorkplaceType[] = ['REMOTE', 'WFO', 'HYBRID'];
-	const employmentTypes: EmploymentType[] = ['FULL_TIME', 'CONTRACT', 'FREELANCE', 'INTERNSHIP'];
+	const employmentTypes: EmploymentType[] = [
+		'FULL_TIME',
+		'PART_TIME',
+		'CONTRACT',
+		'FREELANCE',
+		'INTERNSHIP'
+	];
 	const applicationTypes: ApplicationType[] = ['EMAIL', 'WEBSITE_PORTAL', 'WHATSAPP', 'TELEGRAM'];
 	const auditStatuses: JobStatus[] = [
 		'RAW_PARSED',
