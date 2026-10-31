@@ -116,6 +116,7 @@
 	let quotaTestQuota = $state('');
 	let quotaTestUsed = $state('');
 	let quotaPaygBalance = $state('');
+	let quotaCreditBalance = $state('');
 	let quotaResetAt = $state('');
 	let quotaTestResetAt = $state('');
 	let isSavingQuota = $state(false);
@@ -260,6 +261,7 @@
 		quotaTestQuota = String(item.quotas.monthlyTestQuota);
 		quotaTestUsed = String(item.quotas.monthlyTestUsed);
 		quotaPaygBalance = String(item.quotas.paygBalance);
+		quotaCreditBalance = String(item.quotas.creditBalance);
 		quotaResetAt = toDatetimeLocal(item.quotas.quotaResetAt);
 		quotaTestResetAt = toDatetimeLocal(item.quotas.testQuotaResetAt);
 		quotaError = null;
@@ -304,6 +306,8 @@
 		if (monthlyTestUsed === null) return;
 		const paygBalance = numberField(quotaPaygBalance, 'Saldo PAYG');
 		if (paygBalance === null) return;
+		const creditBalance = numberField(quotaCreditBalance, 'Saldo kredit');
+		if (creditBalance === null) return;
 
 		if (monthlyUsed > monthlyQuota) {
 			quotaError = 'Pemakaian bulanan tidak boleh lebih besar dari kuota bulanan.';
@@ -319,7 +323,8 @@
 			monthlyUsed,
 			monthlyTestQuota,
 			monthlyTestUsed,
-			paygBalance
+			paygBalance,
+			creditBalance
 		};
 		if (quotaResetAt) {
 			const reset = new Date(quotaResetAt);
@@ -559,7 +564,7 @@
 					{/each}
 				</div>
 
-				<div class="mt-4 grid gap-3 sm:grid-cols-3">
+				<div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 					<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
 						<p class="text-[10px] uppercase tracking-wide text-slate-500">Reply rate</p>
 						<p class="mt-1 text-lg font-bold text-cyan-300">
@@ -576,6 +581,12 @@
 						<p class="text-[10px] uppercase tracking-wide text-slate-500">Total saldo PAYG</p>
 						<p class="mt-1 text-lg font-bold text-white">
 							{formatNumber(overview.quotas.totalPaygBalance)}
+						</p>
+					</div>
+					<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+						<p class="text-[10px] uppercase tracking-wide text-slate-500">Total kredit AI</p>
+						<p class="mt-1 text-lg font-bold text-violet-300">
+							{formatNumber(overview.quotas.totalCreditBalance)}
 						</p>
 					</div>
 				</div>
@@ -805,7 +816,8 @@
 									></div>
 								</div>
 								<p class="mt-1 text-[10px] text-slate-500">
-									PAYG {formatNumber(item.quotas.paygBalance)} · tes
+									PAYG {formatNumber(item.quotas.paygBalance)} · Kredit
+									{formatNumber(item.quotas.creditBalance)} · tes
 									{formatNumber(item.quotas.monthlyTestUsed)} / {formatNumber(item.quotas.monthlyTestQuota)}
 								</p>
 							</div>
@@ -994,6 +1006,10 @@
 							<span class="font-medium text-slate-200">{formatNumber(detail.quotas.paygBalance)}</span>
 						</p>
 						<p class="flex justify-between gap-3">
+							<span class="text-slate-500">Saldo kredit AI</span>
+							<span class="font-medium text-slate-200">{formatNumber(detail.quotas.creditBalance)}</span>
+						</p>
+						<p class="flex justify-between gap-3">
 							<span class="text-slate-500">Reset kuota</span>
 							<span class="text-right font-medium text-slate-200">{formatDate(detail.quotas.quotaResetAt)}</span>
 						</p>
@@ -1125,7 +1141,7 @@
 
 <Modal
 	open={quotaTarget !== null}
-	title="Atur Kuota & Saldo PAYG"
+	title="Atur Kuota, PAYG & Kredit"
 	description={quotaTarget?.email ?? ''}
 	size="lg"
 	onclose={() => (isSavingQuota ? undefined : (quotaTarget = null))}
@@ -1158,6 +1174,10 @@
 				<label class="block space-y-1.5 text-sm font-medium text-slate-300">
 					Saldo PAYG
 					<input type="number" min="0" bind:value={quotaPaygBalance} class={inputClass} />
+				</label>
+				<label class="block space-y-1.5 text-sm font-medium text-slate-300">
+					Saldo kredit AI
+					<input type="number" min="0" bind:value={quotaCreditBalance} class={inputClass} />
 				</label>
 				<label class="block space-y-1.5 text-sm font-medium text-slate-300">
 					Reset kuota bulanan

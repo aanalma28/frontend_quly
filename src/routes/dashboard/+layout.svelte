@@ -17,6 +17,7 @@
 	import { auth, getUserRole, homePathForRole, initializeAuth, isAdminRole, logout } from '#lib/stores/auth.js';
 	import { psychotest, setPsychotestCompleted } from '#lib/stores/psychotestStore.js';
 	import { getSessionsApi } from '#lib/services/psychotestApi.js';
+	import { getMyBenefitsApi } from '#lib/services/billingApi.js';
 	import { loadProfile, onboarding, step1Complete } from '#lib/stores/onboardingStore.js';
 	import RequirementsStepsCard from '#lib/components/ui/RequirementsStepsCard.svelte';
 	import { goto } from '$app/navigation';
@@ -25,6 +26,7 @@
 	let { children }: LayoutProps = $props();
 
 	let isAdmin = $state(false);
+	let creditBalance = $state<number | null>(null);
 
 	const navigation = [
 		{ label: 'Ringkasan', href: '/dashboard', icon: LayoutDashboard },
@@ -60,6 +62,13 @@
 			return;
 		}
 		await loadProfile();
+
+		try {
+			const benefits = await getMyBenefitsApi();
+			creditBalance = benefits.creditBalance;
+		} catch {
+			creditBalance = null;
+		}
 
 		// Sinkronkan status Step 2 (psikotes) dari riwayat sesi.
 		try {
@@ -173,7 +182,7 @@
 					class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-indigo-200 hover:text-indigo-700 sm:text-sm"
 				>
 					<WalletCards size={16} />
-					<span>{$auth.user.paygCredits ?? '—'} kredit</span>
+					<span>{creditBalance ?? '—'} kredit</span>
 					<Plus size={14} class="text-indigo-600" />
 				</a>
 				<button

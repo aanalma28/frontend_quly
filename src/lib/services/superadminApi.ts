@@ -47,6 +47,28 @@ export interface PackageQuotas {
 	aiTokenLimit: number;
 }
 
+export interface PackageBenefitDetail {
+	id: string;
+	benefitId: string;
+	code: string;
+	name: string;
+	description: string | null;
+	unit: string;
+	usageLimit: number;
+	creditCost: number;
+	creditPriceIdr: number;
+	overageCostIdr: number;
+	sortOrder: number;
+	isActive: boolean;
+}
+
+export interface PackageBenefitDetailInput {
+	benefitId: string;
+	usageLimit: number;
+	sortOrder?: number;
+	isActive?: boolean;
+}
+
 export interface SubscriptionPackage {
 	id: string;
 	name: string;
@@ -62,6 +84,7 @@ export interface SubscriptionPackage {
 	sortOrder: number;
 	aiTokenLimit: number;
 	quotas: PackageQuotas;
+	details: PackageBenefitDetail[];
 	features: string[];
 	isActive: boolean;
 	subscriberCount: number;
@@ -87,7 +110,62 @@ export interface SubscriptionPackageInput {
 	jobScoringLimit?: number;
 	externalJobExtractionLimit?: number;
 	emailApplicationLimit?: number;
+	details?: PackageBenefitDetailInput[];
 	features: string[];
+	isActive?: boolean;
+}
+
+export interface Benefit {
+	id: string;
+	code: string;
+	name: string;
+	description: string | null;
+	unit: string;
+	creditCost: number;
+	creditPriceIdr: number;
+	overageCostIdr: number;
+	isActive: boolean;
+	packageCount: number;
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface BenefitInput {
+	code?: string;
+	name: string;
+	description?: string | null;
+	unit?: string;
+	creditCost: number;
+	creditPriceIdr: number;
+	isActive?: boolean;
+}
+
+export interface CreditTopupPackage {
+	id: string;
+	name: string;
+	description: string | null;
+	credits: number;
+	bonusCredits: number;
+	totalCredits: number;
+	priceIdr: number;
+	pricePerCreditIdr: number;
+	badge: string | null;
+	isPopular: boolean;
+	sortOrder: number;
+	isActive: boolean;
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface CreditTopupPackageInput {
+	name: string;
+	description?: string | null;
+	credits: number;
+	bonusCredits?: number;
+	priceIdr: number;
+	badge?: string | null;
+	isPopular?: boolean;
+	sortOrder?: number;
 	isActive?: boolean;
 }
 
@@ -188,6 +266,7 @@ export interface UserQuotas {
 	monthlyRemaining: number;
 	quotaResetAt: string | null;
 	paygBalance: number;
+	creditBalance: number;
 	monthlyTestQuota: number;
 	monthlyTestUsed: number;
 	monthlyTestRemaining: number;
@@ -377,6 +456,7 @@ export interface BillingOverviewResponse {
 	quotas: {
 		monthlyApplicationsUsed: number;
 		totalPaygBalance: number;
+		totalCreditBalance: number;
 	};
 	applications: {
 		total: number;
@@ -393,6 +473,7 @@ export interface UpdateUserQuotasInput {
 	monthlyTestQuota?: number;
 	monthlyTestUsed?: number;
 	paygBalance?: number;
+	creditBalance?: number;
 	quotaResetAt?: string;
 	testQuotaResetAt?: string;
 }
@@ -855,6 +936,85 @@ export async function deletePackageApi(
 	id: string
 ): Promise<{ id: string; deleted: boolean }> {
 	const response = await apiRequest(`superadmin/packages/${id}`, { method: 'DELETE' });
+	return (await response.json()) as { id: string; deleted: boolean };
+}
+
+export async function listBenefitsApi(): Promise<Benefit[]> {
+	const response = await apiRequest('superadmin/benefits');
+	const body = (await response.json()) as { items: Benefit[] };
+	return body.items ?? [];
+}
+
+export async function createBenefitApi(input: BenefitInput): Promise<Benefit> {
+	const response = await apiRequest('superadmin/benefits', jsonInit('POST', input));
+	return (await response.json()) as Benefit;
+}
+
+export async function updateBenefitApi(
+	id: string,
+	input: Omit<Partial<BenefitInput>, 'code'>
+): Promise<Benefit> {
+	const response = await apiRequest(`superadmin/benefits/${id}`, jsonInit('PUT', input));
+	return (await response.json()) as Benefit;
+}
+
+export async function toggleBenefitApi(id: string): Promise<Benefit> {
+	const response = await apiRequest(`superadmin/benefits/${id}/toggle`, { method: 'PATCH' });
+	return (await response.json()) as Benefit;
+}
+
+export async function deleteBenefitApi(
+	id: string
+): Promise<{ id: string; deleted: boolean }> {
+	const response = await apiRequest(`superadmin/benefits/${id}`, { method: 'DELETE' });
+	return (await response.json()) as { id: string; deleted: boolean };
+}
+
+export async function listTopupPackagesApi(): Promise<CreditTopupPackage[]> {
+	const response = await apiRequest('superadmin/topup-packages');
+	const body = (await response.json()) as { items: CreditTopupPackage[] };
+	return body.items ?? [];
+}
+
+export async function getTopupPackageApi(id: string): Promise<CreditTopupPackage> {
+	const response = await apiRequest(`superadmin/topup-packages/${id}`);
+	return (await response.json()) as CreditTopupPackage;
+}
+
+export async function createTopupPackageApi(
+	input: CreditTopupPackageInput
+): Promise<CreditTopupPackage> {
+	const response = await apiRequest(
+		'superadmin/topup-packages',
+		jsonInit('POST', input)
+	);
+	return (await response.json()) as CreditTopupPackage;
+}
+
+export async function updateTopupPackageApi(
+	id: string,
+	input: Partial<CreditTopupPackageInput>
+): Promise<CreditTopupPackage> {
+	const response = await apiRequest(
+		`superadmin/topup-packages/${id}`,
+		jsonInit('PUT', input)
+	);
+	return (await response.json()) as CreditTopupPackage;
+}
+
+export async function toggleTopupPackageApi(id: string): Promise<CreditTopupPackage> {
+	const response = await apiRequest(`superadmin/topup-packages/${id}/toggle`, {
+		method: 'PATCH'
+	});
+	return (await response.json()) as CreditTopupPackage;
+}
+
+export async function deleteTopupPackageApi(
+	id: string
+): Promise<{ id: string; deleted: boolean }> {
+	const response = await apiRequest(`superadmin/topup-packages/${id}`, {
+		method: 'DELETE'
+	});
 	return (await response.json()) as { id: string; deleted: boolean };
 }
 

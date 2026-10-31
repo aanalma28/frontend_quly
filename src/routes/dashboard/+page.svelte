@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { ArrowRight, BriefcaseBusiness, Plus, Sparkles, WalletCards } from '@lucide/svelte';
 	import { auth, type AuthUser } from '#lib/stores/auth.js';
-	import { formatRupiah } from '#lib/data/billing.js';
+	import { getMyBenefitsApi } from '#lib/services/billingApi.js';
+	import { formatNumber } from '#lib/utils/billing.js';
 
 	function getQuotaPercent(user: AuthUser | null): number | null {
 		if (
@@ -15,6 +17,18 @@
 	}
 
 	const quotaPercent = $derived(getQuotaPercent($auth.user));
+
+	let creditBalance = $state<number | null>(null);
+
+	onMount(() => {
+		void getMyBenefitsApi()
+			.then((data) => {
+				creditBalance = data.creditBalance;
+			})
+			.catch(() => {
+				creditBalance = null;
+			});
+	});
 </script>
 
 <svelte:head>
@@ -119,10 +133,10 @@
 							<WalletCards size={19} />
 						</span>
 						<div>
-							<p class="text-xs font-medium text-slate-500">Saldo Kredit Kilat</p>
+							<p class="text-xs font-medium text-slate-500">Kredit AI</p>
 							<p class="mt-0.5 text-xl font-bold tracking-tight text-slate-950">
-								{#if typeof $auth.user?.paygBalance === 'number'}
-									{formatRupiah($auth.user.paygBalance)}
+								{#if creditBalance !== null}
+									{formatNumber(creditBalance)} kredit
 								{:else}
 									—
 								{/if}
@@ -130,11 +144,11 @@
 						</div>
 					</div>
 					<span class="rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold text-violet-700 ring-1 ring-violet-100">
-						{$auth.user?.paygCredits ?? '—'} token
+						Siap dipakai
 					</span>
 				</div>
 				<p class="mt-4 text-xs leading-5 text-slate-500">
-					Saldo dan token mengikuti informasi terbaru dari profil akunmu.
+					Kredit dipakai otomatis saat kuota benefit bulanan habis.
 				</p>
 			</div>
 			<a

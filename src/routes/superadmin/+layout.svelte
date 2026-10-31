@@ -4,9 +4,11 @@
 	import { page } from '$app/state';
 	import { get } from 'svelte/store';
 	import {
+		Award,
 		Bot,
 		Boxes,
 		ChartColumn,
+		Coins,
 		CreditCard,
 		Crown,
 		LayoutDashboard,
@@ -57,7 +59,9 @@
 			items: [
 				{ label: 'User Management', href: '/superadmin/users', icon: Users },
 				{ label: 'Billing Management', href: '/superadmin/billing', icon: CreditCard },
-				{ label: 'Subscription Packages', href: '/superadmin/packages', icon: Boxes }
+				{ label: 'Subscription Packages', href: '/superadmin/packages', icon: Boxes },
+				{ label: 'Benefits', href: '/superadmin/benefits', icon: Award },
+				{ label: 'Top-up Packages', href: '/superadmin/topup-packages', icon: Coins }
 			]
 		},
 		{

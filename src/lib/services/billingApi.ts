@@ -7,6 +7,18 @@ import type {
 
 export type PlanId = 'FREE_PLAN' | 'STARTER_PLAN' | 'PRO_PLAN' | 'UNLIMITED_PLAN';
 
+export interface PublicPlanBenefitDetail {
+	benefitId: string;
+	code: string;
+	name: string;
+	description: string | null;
+	unit: string;
+	usageLimit: number;
+	creditCost: number;
+	creditPriceIdr: number;
+	overageCostIdr: number;
+}
+
 export interface PublicBillingPlan {
 	id: string;
 	planId: PlanId;
@@ -26,6 +38,7 @@ export interface PublicBillingPlan {
 	bonusPaygTokens: number;
 	benefits: string[];
 	features: string[];
+	details: PublicPlanBenefitDetail[];
 	quotas: PackageQuotas;
 	isActive: boolean;
 	createdAt: string;
@@ -33,8 +46,50 @@ export interface PublicBillingPlan {
 }
 
 export interface TopupPackage {
-	amountIdr: number;
-	tokens: number;
+	id: string;
+	name: string;
+	description: string | null;
+	credits: number;
+	bonusCredits: number;
+	totalCredits: number;
+	priceIdr: number;
+	pricePerCreditIdr: number;
+	badge: string | null;
+	isPopular: boolean;
+	sortOrder: number;
+	isActive: boolean;
+	createdAt: string;
+	updatedAt: string;
+	/** Backward-compatible fields from older billing responses. */
+	amountIdr?: number;
+	tokens?: number;
+}
+
+export interface UserBenefitQuota {
+	benefitId: string;
+	code: string;
+	name: string;
+	description: string | null;
+	unit: string;
+	limit: number;
+	used: number;
+	remaining: number;
+	resetAt: string | null;
+	creditCost: number;
+	creditPriceIdr: number;
+	overageCostIdr: number;
+	canUseWithCredit: boolean;
+}
+
+export interface MyBenefitsResponse {
+	userId: string;
+	creditBalance: number;
+	benefits: UserBenefitQuota[];
+}
+
+export async function getMyBenefitsApi(): Promise<MyBenefitsResponse> {
+	const response = await apiRequest('benefits/me');
+	return (await response.json()) as MyBenefitsResponse;
 }
 
 export interface PublicBillingPlansResponse {

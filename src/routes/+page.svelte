@@ -384,7 +384,10 @@
 						{#if topupPackages.length > 0}
 							Pilihan top-up:
 							{topupPackages
-								.map((pack) => `${formatRupiah(pack.amountIdr)} (${pack.tokens} Token)`)
+								.map(
+									(pack) =>
+										`${pack.name}: ${formatRupiah(pack.priceIdr)} (${pack.totalCredits} Kredit)`
+								)
 								.join(' atau ')}.
 						{:else}
 							Top-up belum tersedia.

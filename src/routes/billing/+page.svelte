@@ -13,14 +13,17 @@
 		Wallet,
 		Zap
 	} from '@lucide/svelte';
-	import { auth, initializeAuth } from '#lib/stores/auth.js';
+	import { auth, getUserRole, initializeAuth } from '#lib/stores/auth.js';
 	import {
+		getMyBenefitsApi,
 		getPublicBillingPlansApi,
 		subscribePlanApi,
+		type MyBenefitsResponse,
 		type PublicBillingPlan,
 		type TopupPackage
 	} from '#lib/services/billingApi.js';
 	import { tierLabel } from '#lib/components/superadmin/status.js';
+	import { formatDate } from '#lib/components/superadmin/format.js';
 	import RichText from '#lib/components/superadmin/RichText.svelte';
 	import {
 		billingPeriodLabel,
@@ -36,8 +39,12 @@
 	let plansLoading = $state(true);
 	let plansError = $state<string | null>(null);
 
+	let myBenefits = $state<MyBenefitsResponse | null>(null);
+	let benefitsLoading = $state(true);
+	let benefitsError = $state<string | null>(null);
+
 	let selectedPlanId = $state<string | null>(null);
-	let selectedTopUpId = $state<number | null>(null);
+	let selectedTopUpId = $state<string | null>(null);
 	let topUpRequested = $state(false);
 	let isSubscribing = $state(false);
 	let subscribeMessage = $state<string | null>(null);
@@ -65,6 +72,34 @@
 		return `${formatNumber(plan.monthlyApplicationQuota)} email lamaran${suffix}`;
 	}
 
+	function benefitProgress(limit: number, used: number): number {
+		if (limit <= 0) return 0;
+		return Math.min(100, Math.max(0, (used / limit) * 100));
+	}
+
+	function benefitQuotaLabel(limit: number, used: number, remaining: number): string {
+		if (isUnlimitedQuota(limit) || remaining === -1) return 'Unlimited';
+		return `${formatNumber(Math.max(remaining, 0))} / ${formatNumber(limit)} tersisa`;
+	}
+
+	function benefitResetLabel(resetAt: string | null): string {
+		if (!resetAt) return 'Tidak direset otomatis';
+		return `Reset ${formatDate(resetAt)}`;
+	}
+
+	async function loadBenefits() {
+		benefitsLoading = true;
+		benefitsError = null;
+		try {
+			myBenefits = await getMyBenefitsApi();
+		} catch (error) {
+			benefitsError =
+				error instanceof Error ? error.message : 'Kuota benefit belum dapat dimuat.';
+		} finally {
+			benefitsLoading = false;
+		}
+	}
+
 	async function loadPlans() {
 		plansLoading = true;
 		plansError = null;
@@ -88,6 +123,7 @@
 		try {
 			await subscribePlanApi(plan.planId);
 			await initializeAuth();
+			await loadBenefits();
 			subscribeMessage = `Paket ${plan.name} berhasil diaktifkan.`;
 			await loadPlans();
 		} catch (error) {
@@ -106,14 +142,18 @@
 			'Pembayaran paket berbayar belum tersedia. Superadmin dapat mengaktifkan paket ini secara manual dari Billing Management.';
 	}
 
-	function topupLabel(pack: TopupPackage): string {
-		return pack.amountIdr === 10000 ? 'Paket Hemat' : 'Paket Pejuang';
-	}
-
 	onMount(async () => {
 		const [, authenticated] = await Promise.all([loadPlans(), initializeAuth()]);
 		if (!authenticated && !get(auth).error) {
 			await goto('/auth/login?redirectTo=%2Fbilling');
+			return;
+		}
+		if (authenticated) {
+			if (getUserRole() === 'JOB_SEEKER') {
+				await loadBenefits();
+			} else {
+				benefitsLoading = false;
+			}
 		}
 	});
 </script>
@@ -181,13 +221,12 @@
 		</div>
 		<div class="mx-auto mt-3 flex max-w-2xl flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-slate-500">
 			<span>{$auth.user.fullName} · {$auth.user.email}</span>
-			<span>Saldo Kredit Kilat:
-				{#if typeof $auth.user.paygBalance === 'number'}
-					{formatRupiah($auth.user.paygBalance)}
+			<span>Kredit AI:
+				{#if myBenefits}
+					{formatNumber(myBenefits.creditBalance)} kredit
 				{:else}
 					—
 				{/if}
-				({$auth.user.paygCredits ?? '—'} token)
 			</span>
 		</div>
 
@@ -355,6 +394,129 @@
 			{/if}
 		</section>
 
+		<section id="kuota-kredit" class="mt-10 scroll-mt-8" aria-labelledby="quota-title">
+			<div class="mb-5 flex flex-wrap items-end justify-between gap-4">
+				<div>
+					<p class="text-xs font-bold uppercase tracking-[0.14em] text-indigo-600">Kuota AI</p>
+					<h2 id="quota-title" class="mt-1 text-xl font-bold tracking-tight text-slate-950">
+						Pemakaian benefit & kredit
+					</h2>
+				</div>
+				<span class="text-xs text-slate-500">Kuota otomatis memakai kredit jika habis</span>
+			</div>
+
+			{#if benefitsLoading}
+				<div class="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">
+					Memuat kuota benefit...
+				</div>
+			{:else if benefitsError}
+				<div class="rounded-2xl border border-dashed border-rose-200 bg-white px-4 py-8 text-center">
+					<p class="text-sm text-rose-700" role="alert">{benefitsError}</p>
+					<button
+						type="button"
+						onclick={() => void loadBenefits()}
+						class="mt-3 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700"
+					>
+						Coba lagi
+					</button>
+				</div>
+			{:else if myBenefits}
+				<div class="grid gap-4 lg:grid-cols-[0.72fr_1.28fr]">
+					<div class="rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-600 to-violet-600 p-6 text-white shadow-sm">
+						<p class="text-[10px] font-bold uppercase tracking-[0.14em] text-indigo-200">
+							Saldo Kredit AI
+						</p>
+						<p class="mt-2 text-4xl font-bold tracking-tight">
+							{formatNumber(myBenefits.creditBalance)}
+						</p>
+						<p class="mt-1 text-xs text-indigo-100">kredit tersedia</p>
+						<p class="mt-4 text-[11px] leading-5 text-indigo-100/85">
+							Kredit dipakai otomatis ketika kuota benefit bulanan habis. Harga per kredit
+							ditentukan oleh masing-masing benefit.
+						</p>
+						<a
+							href="#kredit-kilat"
+							class="mt-5 inline-flex items-center gap-1.5 rounded-lg bg-white/15 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/25"
+						>
+							<Zap size={14} /> Top-up Kredit
+						</a>
+					</div>
+
+					<div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+						<h3 class="text-sm font-bold text-slate-950">Kuota benefit</h3>
+						{#if myBenefits.benefits.length === 0}
+							<p class="mt-4 text-xs text-slate-500">
+								Belum ada benefit aktif untuk akun ini.
+							</p>
+						{:else}
+							<div class="mt-4 grid gap-3 sm:grid-cols-2">
+								{#each myBenefits.benefits as benefit}
+									{@const unlimited = isUnlimitedQuota(benefit.limit)}
+									<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+										<div class="flex items-start justify-between gap-2">
+											<div class="min-w-0">
+												<p class="truncate text-xs font-bold text-slate-800" title={benefit.name}>
+													{benefit.name}
+												</p>
+												<p class="mt-0.5 font-mono text-[9px] text-slate-400">{benefit.code}</p>
+											</div>
+											{#if benefit.canUseWithCredit}
+												<span class="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-semibold text-emerald-700">
+													Kredit siap
+												</span>
+											{/if}
+										</div>
+
+										<div class="mt-3 flex items-baseline justify-between gap-2">
+											<p class="text-sm font-bold text-slate-900">
+												{benefitQuotaLabel(benefit.limit, benefit.used, benefit.remaining)}
+											</p>
+											{#if !unlimited}
+												<span class="text-[10px] text-slate-500">
+													{formatNumber(benefit.used)} terpakai
+												</span>
+											{/if}
+										</div>
+										{#if !unlimited}
+											<div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-200">
+												<div
+													class="h-full rounded-full {benefitProgress(benefit.limit, benefit.used) >= 90
+														? 'bg-rose-500'
+														: benefitProgress(benefit.limit, benefit.used) >= 60
+															? 'bg-amber-500'
+															: 'bg-indigo-500'}"
+													style:width={`${benefitProgress(benefit.limit, benefit.used)}%`}
+												></div>
+											</div>
+										{:else}
+											<div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-emerald-100">
+												<div class="h-full w-full rounded-full bg-emerald-500"></div>
+											</div>
+										{/if}
+
+										<p class="mt-2 text-[10px] leading-4 text-slate-500">
+											{benefitResetLabel(benefit.resetAt)}
+										</p>
+										<p class="mt-1 text-[10px] leading-4 text-slate-500">
+											{#if benefit.creditCost > 0}
+												Habis → {benefit.creditCost} kredit (~{formatRupiah(benefit.overageCostIdr)})
+											{:else}
+												Tidak tersedia via kredit
+											{/if}
+										</p>
+									</div>
+								{/each}
+							</div>
+						{/if}
+					</div>
+				</div>
+			{:else}
+				<div class="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500">
+					Data kuota belum tersedia.
+				</div>
+			{/if}
+		</section>
+
 		<section
 			id="kredit-kilat"
 			class="mt-12 scroll-mt-8 overflow-hidden rounded-2xl border border-violet-200 bg-white shadow-sm sm:mt-16"
@@ -394,7 +556,9 @@
 						<div>
 							<p class="text-xs font-bold uppercase tracking-[0.13em] text-violet-600">Isi saldo</p>
 							<h3 class="mt-1 text-lg font-bold text-slate-950">Pilih paket kredit</h3>
-							<p class="mt-1 text-xs text-slate-500">1 token = 1 aksi kirim lamaran otomatis</p>
+							<p class="mt-1 text-xs text-slate-500">
+								Kredit dipakai untuk benefit AI dan PAYG.
+							</p>
 						</div>
 						<span class="hidden size-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600 sm:flex">
 							<Wallet size={19} />
@@ -407,24 +571,42 @@
 						</p>
 					{:else}
 						<div class="mt-5 grid gap-3 sm:grid-cols-2">
-							{#each topupPackages as pack}
-								{@const isSelected = selectedTopUpId === pack.amountIdr}
+							{#each topupPackages as pack (pack.id)}
+								{@const isSelected = selectedTopUpId === pack.id}
 								<button
 									type="button"
 									aria-pressed={isSelected}
 									onclick={() => {
-										selectedTopUpId = pack.amountIdr;
+										selectedTopUpId = pack.id;
 										topUpRequested = false;
 									}}
 									class="relative rounded-xl border p-3 text-left transition {isSelected
 										? 'border-violet-500 bg-violet-50 ring-2 ring-violet-100'
-										: 'border-slate-200 bg-white hover:border-violet-200 hover:bg-violet-50/50'}"
+										: pack.isPopular
+											? 'border-violet-300 bg-violet-50/40 hover:border-violet-400'
+											: 'border-slate-200 bg-white hover:border-violet-200 hover:bg-violet-50/50'}"
 								>
-									<span class="block text-[10px] font-semibold text-slate-500">{topupLabel(pack)}</span>
-									<strong class="mt-1 block text-sm font-bold text-slate-900">
-										{formatRupiah(pack.amountIdr)}
+									{#if pack.badge || pack.isPopular}
+										<span class="absolute -top-2 right-2 rounded-full bg-emerald-100 px-2 py-0.5 text-[8px] font-bold text-emerald-700">
+											{pack.badge ?? 'POPULER'}
+										</span>
+									{/if}
+									<span class="block pr-16 text-[10px] font-semibold text-slate-500">{pack.name}</span>
+									{#if pack.description}
+										<span class="mt-1 line-clamp-2 block text-[10px] leading-4 text-slate-400">
+											{pack.description}
+										</span>
+									{/if}
+									<strong class="mt-1.5 block text-base font-bold text-slate-900">
+										{formatRupiah(pack.priceIdr)}
 									</strong>
-									<span class="mt-1 block text-[10px] text-slate-500">{pack.tokens} Token</span>
+									<span class="mt-1 block text-[10px] text-slate-500">
+										{pack.credits} kredit{#if pack.bonusCredits > 0}
+											+ {pack.bonusCredits} bonus = {pack.totalCredits} kredit{/if}
+									</span>
+									<span class="mt-0.5 block text-[10px] text-slate-400">
+										± {formatRupiah(pack.pricePerCreditIdr)} / kredit
+									</span>
 								</button>
 							{/each}
 						</div>
@@ -450,7 +632,7 @@
 							</span>
 						{:else}
 							<span class="text-[10px] leading-4 text-slate-400">
-								Pilih nominal untuk melihat ringkasan top-up.
+								Pilih paket kredit untuk melihat ringkasan top-up.
 							</span>
 						{/if}
 					</div>

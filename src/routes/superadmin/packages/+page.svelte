@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import {
+		Award,
 		Boxes,
 		Check,
 		Pencil,
@@ -22,10 +23,13 @@
 	import {
 		createPackageApi,
 		deletePackageApi,
+		listBenefitsApi,
 		listPackagesApi,
 		togglePackageApi,
 		updatePackageApi,
+		type Benefit,
 		type BillingPeriod,
+		type PackageBenefitDetailInput,
 		type PackageTier,
 		type SubscriptionPackage,
 		type SubscriptionPackageInput
@@ -50,6 +54,7 @@
 	};
 
 	let packages = $state<SubscriptionPackage[]>([]);
+	let benefits = $state<Benefit[]>([]);
 	let isLoading = $state(true);
 	let loadError = $state<string | null>(null);
 	let errorMessage = $state<string | null>(null);
@@ -75,6 +80,15 @@
 	let formExternalJob = $state('0');
 	let formEmailApplications = $state('0');
 	let formFeatureItems = $state<Array<{ id: string; html: string }>>([]);
+	let formBenefitDetails = $state<
+		Array<{
+			key: string;
+			benefitId: string;
+			usageLimit: string;
+			sortOrder: string;
+			isActive: boolean;
+		}>
+	>([]);
 	let formActive = $state(true);
 	let isSaving = $state(false);
 	let formError = $state<string | null>(null);
@@ -108,6 +122,48 @@
 		formFeatureItems = formFeatureItems.filter((item) => item.id !== id);
 	}
 
+	function benefitById(id: string): Benefit | undefined {
+		return benefits.find((benefit) => benefit.id === id);
+	}
+
+	function benefitOptions(currentKey: string, currentBenefitId: string): Benefit[] {
+		return benefits.filter(
+			(benefit) =>
+				benefit.id === currentBenefitId ||
+				!formBenefitDetails.some(
+					(detail) => detail.key !== currentKey && detail.benefitId === benefit.id
+				)
+		);
+	}
+
+	function addBenefitDetail() {
+		const used = new Set(formBenefitDetails.map((detail) => detail.benefitId));
+		const next = benefits.find((benefit) => !used.has(benefit.id));
+		formBenefitDetails = [
+			...formBenefitDetails,
+			{
+				key: featureId(),
+				benefitId: next?.id ?? '',
+				usageLimit: '0',
+				sortOrder: String(formBenefitDetails.length),
+				isActive: true
+			}
+		];
+	}
+
+	function updateBenefitDetail(
+		key: string,
+		patch: Partial<{ benefitId: string; usageLimit: string; sortOrder: string; isActive: boolean }>
+	) {
+		formBenefitDetails = formBenefitDetails.map((detail) =>
+			detail.key === key ? { ...detail, ...patch } : detail
+		);
+	}
+
+	function removeBenefitDetail(key: string) {
+		formBenefitDetails = formBenefitDetails.filter((detail) => detail.key !== key);
+	}
+
 	function integerValue(
 		value: string,
 		label: string,
@@ -126,7 +182,12 @@
 		isLoading = true;
 		loadError = null;
 		try {
-			packages = await listPackagesApi();
+			const [packageList, benefitList] = await Promise.all([
+				listPackagesApi(),
+				listBenefitsApi()
+			]);
+			packages = packageList;
+			benefits = benefitList;
 		} catch (error) {
 			loadError = errorText(error, 'Daftar paket belum dapat dimuat.');
 		} finally {
@@ -154,6 +215,7 @@
 		formExternalJob = '0';
 		formEmailApplications = '0';
 		formFeatureItems = [{ id: featureId(), html: '' }];
+		formBenefitDetails = [];
 		formActive = true;
 		formError = null;
 		modalOpen = true;
@@ -185,6 +247,13 @@
 						html: sanitizeRichText(feature)
 					}))
 				: [{ id: featureId(), html: '' }];
+		formBenefitDetails = pkg.details.map((detail) => ({
+			key: featureId(),
+			benefitId: detail.benefitId,
+			usageLimit: String(detail.usageLimit),
+			sortOrder: String(detail.sortOrder),
+			isActive: detail.isActive
+		}));
 		formActive = pkg.isActive;
 		formError = null;
 		modalOpen = true;
@@ -277,6 +346,44 @@
 			return;
 		}
 
+		const details: PackageBenefitDetailInput[] = [];
+		const usedBenefitIds = new Set<string>();
+		for (const [index, detail] of formBenefitDetails.entries()) {
+			if (!detail.benefitId) {
+				formError = `Benefit baris ${index + 1} belum dipilih.`;
+				return;
+			}
+			if (usedBenefitIds.has(detail.benefitId)) {
+				formError = 'Satu benefit tidak boleh dipilih dua kali.';
+				return;
+			}
+			const usageLimit = Number(detail.usageLimit);
+			if (
+				!Number.isInteger(usageLimit) ||
+				usageLimit < -1 ||
+				usageLimit > MAX_QUOTA
+			) {
+				formError = `Kuota benefit baris ${index + 1} harus -1 atau bilangan bulat ≥ 0.`;
+				return;
+			}
+			const detailSortOrder = Number(detail.sortOrder);
+			if (
+				!Number.isInteger(detailSortOrder) ||
+				detailSortOrder < 0 ||
+				detailSortOrder > 1000
+			) {
+				formError = `Urutan benefit baris ${index + 1} harus 0–1000.`;
+				return;
+			}
+			usedBenefitIds.add(detail.benefitId);
+			details.push({
+				benefitId: detail.benefitId,
+				usageLimit,
+				sortOrder: detailSortOrder,
+				isActive: detail.isActive
+			});
+		}
+
 		const features = formFeatureItems
 			.map((item) => sanitizeRichText(item.html))
 			.filter((html) => !isEmptyRichText(html));
@@ -299,6 +406,7 @@
 			jobScoringLimit,
 			externalJobExtractionLimit,
 			emailApplicationLimit,
+			details,
 			features,
 			isActive: formActive
 		};
@@ -674,6 +782,130 @@
 					<input bind:value={formAiTokenLimit} type="number" min="-1" class={inputClass} />
 				</label>
 			</div>
+		</div>
+
+		<div class="rounded-xl border border-slate-800 bg-slate-950/30 p-3">
+			<div class="flex flex-wrap items-start justify-between gap-3">
+				<div>
+					<p class="flex items-center gap-2 text-sm font-medium text-slate-300">
+						<Award size={15} class="text-indigo-300" /> Benefit & kuota fleksibel
+					</p>
+					<p class="mt-0.5 text-[11px] text-slate-500">
+						Daftar ini dikirim ke backend dan menggantikan benefit paket sebelumnya. Kuota
+						<strong class="text-slate-300">-1</strong> berarti unlimited.
+					</p>
+				</div>
+				<div class="flex flex-wrap gap-2">
+					<a
+						href="/superadmin/benefits"
+						class="inline-flex h-8 items-center rounded-lg border border-slate-700 px-2.5 text-xs font-semibold text-slate-300 transition hover:bg-slate-800"
+					>
+						Kelola benefit
+					</a>
+					<button
+						type="button"
+						onclick={addBenefitDetail}
+						disabled={benefits.length === 0}
+						class="inline-flex h-8 items-center gap-1 rounded-lg border border-indigo-500/30 px-2.5 text-xs font-semibold text-indigo-300 transition hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+					>
+						<Plus size={14} /> Tambah benefit
+					</button>
+				</div>
+			</div>
+
+			{#if benefits.length === 0}
+				<p class="mt-3 rounded-lg border border-dashed border-slate-700 px-3 py-4 text-center text-xs text-slate-500">
+					Belum ada master benefit. Buat benefit terlebih dahulu di halaman Benefits.
+				</p>
+			{:else if formBenefitDetails.length === 0}
+				<p class="mt-3 rounded-lg border border-dashed border-slate-700 px-3 py-4 text-center text-xs text-slate-500">
+					Belum ada benefit di paket ini. Klik "Tambah benefit".
+				</p>
+			{:else}
+				<div class="mt-3 space-y-2">
+					{#each formBenefitDetails as detail, index (detail.key)}
+						{@const selectedBenefit = benefitById(detail.benefitId)}
+						<div class="rounded-lg border border-slate-800 bg-slate-900/50 p-2.5">
+							<div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_7rem_6rem_auto] sm:items-end">
+								<label class="block space-y-1 text-[10px] font-medium text-slate-400">
+									Benefit
+									<select
+										value={detail.benefitId}
+										onchange={(event) =>
+											updateBenefitDetail(detail.key, {
+												benefitId: event.currentTarget.value
+											})}
+										class="{inputClass} text-xs"
+									>
+										<option value="">Pilih benefit</option>
+										{#each benefitOptions(detail.key, detail.benefitId) as benefit}
+											<option value={benefit.id}>
+												{benefit.name} ({benefit.code}){benefit.isActive ? '' : ' — nonaktif'}
+											</option>
+										{/each}
+									</select>
+								</label>
+								<label class="block space-y-1 text-[10px] font-medium text-slate-400">
+									Kuota
+									<input
+										type="number"
+										min="-1"
+										value={detail.usageLimit}
+										oninput={(event) =>
+											updateBenefitDetail(detail.key, {
+												usageLimit: event.currentTarget.value
+											})}
+										class="{inputClass} text-xs"
+									/>
+								</label>
+								<label class="block space-y-1 text-[10px] font-medium text-slate-400">
+									Urutan
+									<input
+										type="number"
+										min="0"
+										max="1000"
+										value={detail.sortOrder}
+										oninput={(event) =>
+											updateBenefitDetail(detail.key, {
+												sortOrder: event.currentTarget.value
+											})}
+										class="{inputClass} text-xs"
+									/>
+								</label>
+								<button
+									type="button"
+									onclick={() => removeBenefitDetail(detail.key)}
+									aria-label="Hapus benefit"
+									class="mb-0.5 rounded-lg p-2 text-slate-500 transition hover:bg-rose-500/10 hover:text-rose-300"
+								>
+									<Trash2 size={14} />
+								</button>
+							</div>
+							<div class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-500">
+								{#if selectedBenefit}
+									<span>{selectedBenefit.creditCost} kredit/pakai</span>
+									<span>·</span>
+									<span>{formatRupiah(selectedBenefit.creditPriceIdr)}/kredit</span>
+									<span>·</span>
+									<span>overage {formatRupiah(selectedBenefit.overageCostIdr)}</span>
+								{/if}
+								<label class="ml-auto inline-flex cursor-pointer items-center gap-1.5 text-slate-400">
+									<input
+										type="checkbox"
+										checked={detail.isActive}
+										onchange={(event) =>
+											updateBenefitDetail(detail.key, {
+												isActive: event.currentTarget.checked
+											})}
+										class="h-3.5 w-3.5 rounded border-slate-600 bg-slate-950 text-indigo-500"
+									/>
+									Aktif
+								</label>
+							</div>
+						</div>
+					{/each}
+				</div>
+			{/if}
 		</div>
 
 		<div class="space-y-2">

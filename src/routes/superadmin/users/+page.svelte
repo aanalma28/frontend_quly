@@ -601,7 +601,8 @@
 									<span class="text-slate-500">kuota bulanan</span>
 								</p>
 								<p class="mt-0.5 text-[10px] text-slate-500">
-									PAYG {formatNumber(user.quotas.paygBalance)} · tes
+									PAYG {formatNumber(user.quotas.paygBalance)} · Kredit
+									{formatNumber(user.quotas.creditBalance)} · tes
 									{formatNumber(user.quotas.monthlyTestUsed)} / {formatNumber(user.quotas.monthlyTestQuota)}
 								</p>
 							</div>
@@ -826,6 +827,10 @@
 						<p class="flex justify-between gap-3">
 							<span class="text-slate-500">Saldo PAYG</span>
 							<span class="font-medium text-slate-200">{formatNumber(detail.quotas.paygBalance)}</span>
+						</p>
+						<p class="flex justify-between gap-3">
+							<span class="text-slate-500">Saldo kredit AI</span>
+							<span class="font-medium text-slate-200">{formatNumber(detail.quotas.creditBalance)}</span>
 						</p>
 						<p class="flex justify-between gap-3">
 							<span class="text-slate-500">Reset kuota</span>
