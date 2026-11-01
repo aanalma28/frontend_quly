@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { AlertTriangle, CheckCircle2, Link2, Mail, RefreshCw, Unplug } from '@lucide/svelte';
+	import { AlertTriangle, CheckCircle2, Link2, RefreshCw, Unplug } from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
+	import GmailIcon from '#lib/components/ui/GmailIcon.svelte';
 
 	interface Props {
 		connected: boolean | null;
@@ -30,8 +31,8 @@
 <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-100/60 sm:p-6" aria-labelledby="gmail-card-title">
 	<div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 		<div class="flex items-start gap-3">
-			<span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
-				<Mail size={21} />
+			<span class="flex size-11 shrink-0 items-center justify-center rounded-xl border border-slate-100 bg-white shadow-sm">
+				<GmailIcon size={28} />
 			</span>
 			<div>
 				<p class="text-[10px] font-bold uppercase tracking-[0.15em] text-indigo-600">Integrasi pengiriman</p>

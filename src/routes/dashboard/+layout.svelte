@@ -7,6 +7,7 @@
 		LayoutDashboard,
 		LogOut,
 		MailCheck,
+		Plug,
 		Plus,
 		UserRound,
 		WalletCards
@@ -33,7 +34,8 @@
 		{ label: 'Lamaran otomatis', href: '/dashboard/auto-apply', icon: MailCheck },
 		{ label: 'Pusat lowongan', href: '/dashboard/manual-hub', icon: BriefcaseBusiness },
 		{ label: 'Psikotes', href: '/dashboard/psychotest', icon: BrainCircuit },
-		{ label: 'Profil & Ekstraksi CV', href: '/dashboard/onboarding', icon: UserRound }
+		{ label: 'Profil & Ekstraksi CV', href: '/dashboard/onboarding', icon: UserRound },
+		{ label: 'Integrasi', href: '/dashboard/integrations', icon: Plug }
 	];
 
 	function isActive(href: string) {
@@ -220,7 +222,7 @@
 		</header>
 
 		<main class="mx-auto max-w-[1440px] px-5 py-7 sm:px-8 sm:py-9">
-			{#if page.url.pathname === '/dashboard' || page.url.pathname === '/dashboard/onboarding'}
+			{#if page.url.pathname === '/dashboard' || page.url.pathname === '/dashboard/onboarding' || page.url.pathname === '/dashboard/integrations'}
 				{@render children()}
 			{:else if $onboarding.isLoadingProfile}
 				<div class="flex items-center justify-center gap-3 py-16 text-sm text-slate-500" aria-label="Memuat status akses">

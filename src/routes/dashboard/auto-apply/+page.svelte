@@ -12,16 +12,14 @@
 		X
 	} from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
+	import GmailIcon from '#lib/components/ui/GmailIcon.svelte';
 	import ApplicationHistory from '#lib/components/auto-apply/ApplicationHistory.svelte';
 	import DocumentSetup from '#lib/components/auto-apply/DocumentSetup.svelte';
 	import EmailPreviewDrawer from '#lib/components/auto-apply/EmailPreviewDrawer.svelte';
 	import ExtractJobModal from '#lib/components/auto-apply/ExtractJobModal.svelte';
-	import GmailIntegrationCard from '#lib/components/auto-apply/GmailIntegrationCard.svelte';
 	import JobChecklist from '#lib/components/auto-apply/JobChecklist.svelte';
 	import {
 		bookmarkToAutoApplyOption,
-		disconnectGmailApi,
-		getGmailConnectUrlApi,
 		getGmailStatusApi,
 		listAutoApplyApplicationsApi,
 		prepareAutoApplyApi,
@@ -48,7 +46,6 @@
 	} from '#lib/services/psychotestApi.js';
 	import { ApiError } from '#lib/utils/api.js';
 	import { formatNumber, isUnlimitedQuota } from '#lib/utils/billing.js';
-	import { auth } from '#lib/stores/auth.js';
 
 	type Tab = 'prepare' | 'history';
 	type Toast = { type: 'success' | 'error' | 'info'; message: string };
@@ -59,8 +56,6 @@
 
 	let gmailConnected = $state<boolean | null>(null);
 	let gmailLoading = $state(true);
-	let gmailConnecting = $state(false);
-	let gmailDisconnecting = $state(false);
 	let gmailError = $state<string | null>(null);
 
 	let cvs = $state<CvFileMetadata[]>([]);
@@ -169,36 +164,6 @@
 			gmailError = errorText(error, 'Status Gmail belum dapat dimuat.');
 		} finally {
 			gmailLoading = false;
-		}
-	}
-
-	async function connectGmail() {
-		if (gmailConnecting) return;
-		gmailConnecting = true;
-		gmailError = null;
-		try {
-			const response = await getGmailConnectUrlApi();
-			if (!response.authUrl) throw new Error('URL koneksi Gmail tidak tersedia.');
-			window.location.assign(response.authUrl);
-		} catch (error) {
-			gmailError = errorText(error, 'Gagal membuka koneksi Gmail.');
-			gmailConnecting = false;
-		}
-	}
-
-	async function disconnectGmail() {
-		if (gmailDisconnecting) return;
-		if (!window.confirm('Putuskan koneksi Gmail? Auto-apply tidak dapat mengirim email sampai kamu menghubungkannya kembali.')) return;
-		gmailDisconnecting = true;
-		gmailError = null;
-		try {
-			const response = await disconnectGmailApi();
-			gmailConnected = response.connected;
-			showToast('Gmail berhasil diputuskan.', 'info');
-		} catch (error) {
-			gmailError = errorText(error, 'Gmail belum dapat diputuskan.');
-		} finally {
-			gmailDisconnecting = false;
 		}
 	}
 
@@ -587,17 +552,31 @@
 	</section>
 
 	{#if activeTab === 'prepare'}
-		<GmailIntegrationCard
-			connected={gmailConnected}
-			loading={gmailLoading}
-			connecting={gmailConnecting}
-			disconnecting={gmailDisconnecting}
-			email={$auth.user?.email}
-			error={gmailError}
-			onconnect={() => void connectGmail()}
-			ondisconnect={() => void disconnectGmail()}
-			onretry={() => void loadGmailStatus()}
-		/>
+		{#if gmailConnected === true}
+			<div class="flex flex-wrap items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 px-4 py-3">
+				<span class="flex size-9 items-center justify-center rounded-xl border border-white bg-white shadow-sm"><GmailIcon size={22} /></span>
+				<div class="min-w-0">
+					<p class="text-xs font-bold text-emerald-900">Gmail terhubung</p>
+					<p class="text-[10px] text-emerald-700/80">Pengiriman lamaran otomatis siap digunakan.</p>
+				</div>
+				<a href="/dashboard/integrations" class="ml-auto text-[11px] font-semibold text-emerald-800 underline">Kelola koneksi</a>
+			</div>
+		{:else if gmailConnected === false}
+			<div class="flex flex-wrap items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3">
+				<span class="flex size-9 items-center justify-center rounded-xl border border-white bg-white shadow-sm"><GmailIcon size={22} /></span>
+				<div class="min-w-0">
+					<p class="text-xs font-bold text-amber-900">Gmail belum terhubung</p>
+					<p class="text-[10px] text-amber-700/80">Hubungkan Gmail di menu Integrasi sebelum mengirim lamaran.</p>
+				</div>
+				<a href="/dashboard/integrations" class="ml-auto inline-flex h-8 items-center rounded-lg bg-amber-800 px-3 text-[11px] font-semibold text-white hover:bg-amber-900">Buka Integrasi</a>
+			</div>
+		{:else if !gmailLoading}
+			<div class="flex flex-wrap items-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-xs text-rose-700" role="alert">
+				<AlertTriangle size={15} />
+				<span>{gmailError ?? 'Status Gmail belum dapat dimuat.'}</span>
+				<button type="button" onclick={() => void loadGmailStatus()} class="ml-auto font-semibold underline">Coba lagi</button>
+			</div>
+		{/if}
 
 		<DocumentSetup
 			{cvs}

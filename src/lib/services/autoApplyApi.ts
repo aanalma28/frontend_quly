@@ -10,6 +10,10 @@ export interface GmailConnectResponse {
 	authUrl: string;
 }
 
+export interface GmailCallbackUrlResponse {
+	callbackUrl: string;
+}
+
 export async function getGmailStatusApi(): Promise<GmailStatusResponse> {
 	const response = await apiRequest('auth/gmail/status');
 	return (await response.json()) as GmailStatusResponse;
@@ -18,6 +22,11 @@ export async function getGmailStatusApi(): Promise<GmailStatusResponse> {
 export async function getGmailConnectUrlApi(): Promise<GmailConnectResponse> {
 	const response = await apiRequest('auth/gmail/connect');
 	return (await response.json()) as GmailConnectResponse;
+}
+
+export async function getGmailCallbackUrlApi(): Promise<GmailCallbackUrlResponse> {
+	const response = await apiRequest('auth/gmail/callback-url');
+	return (await response.json()) as GmailCallbackUrlResponse;
 }
 
 export async function disconnectGmailApi(): Promise<GmailStatusResponse> {
