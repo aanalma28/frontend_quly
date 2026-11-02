@@ -72,9 +72,9 @@
 		return `${formatNumber(plan.monthlyApplicationQuota)} email lamaran${suffix}`;
 	}
 
-	function benefitProgress(limit: number, used: number): number {
-		if (limit <= 0) return 0;
-		return Math.min(100, Math.max(0, (used / limit) * 100));
+	function benefitProgress(limit: number, remaining: number): number {
+		if (limit <= 0 || remaining < 0) return 0;
+		return Math.min(100, Math.max(0, (remaining / limit) * 100));
 	}
 
 	function benefitQuotaLabel(limit: number, used: number, remaining: number): string {
@@ -452,6 +452,7 @@
 							<div class="mt-4 grid gap-3 sm:grid-cols-2">
 								{#each myBenefits.benefits as benefit}
 									{@const unlimited = isUnlimitedQuota(benefit.limit)}
+									{@const progress = unlimited ? 100 : benefitProgress(benefit.limit, benefit.remaining)}
 									<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
 										<div class="flex items-start justify-between gap-2">
 											<div class="min-w-0">
@@ -480,12 +481,12 @@
 										{#if !unlimited}
 											<div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-200">
 												<div
-													class="h-full rounded-full {benefitProgress(benefit.limit, benefit.used) >= 90
-														? 'bg-rose-500'
-														: benefitProgress(benefit.limit, benefit.used) >= 60
+													class="h-full rounded-full {progress >= 60
+														? 'bg-emerald-500'
+														: progress >= 30
 															? 'bg-amber-500'
-															: 'bg-indigo-500'}"
-													style:width={`${benefitProgress(benefit.limit, benefit.used)}%`}
+															: 'bg-rose-500'}"
+													style:width={`${progress}%`}
 												></div>
 											</div>
 										{:else}
