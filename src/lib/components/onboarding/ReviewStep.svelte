@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { ArrowLeft, ArrowRight, BriefcaseBusiness, ChevronDown, GraduationCap, Plus, Trash2 } from '@lucide/svelte';
+	import { ArrowLeft, ArrowRight, BriefcaseBusiness, GraduationCap, Plus, Trash2 } from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import { getMyBenefitsApi, type UserBenefitQuota } from '#lib/services/billingApi.js';
 	import { formatRupiah, isUnlimitedQuota } from '#lib/utils/billing.js';
@@ -57,17 +57,17 @@
 		{
 			value: 'PROFESSIONAL_CORPORATE',
 			label: 'Professional Corporate',
-			description: 'Tone formal, berfokus pada kepemimpinan, kepatuhan proses, dan stabilitas organisasi.'
+			description: 'Gaya formal, berfokus pada kepemimpinan, kepatuhan proses, dan stabilitas organisasi.'
 		},
 		{
 			value: 'TECH_STARTUP',
 			label: 'Tech Startup',
-			description: 'Tone dinamis, berfokus pada eksekusi cepat, metrik kuantitatif, dan tech stack modern.'
+			description: 'Gaya dinamis, berfokus pada eksekusi cepat, metrik kuantitatif, dan tech stack modern.'
 		},
 		{
 			value: 'MINIMALIST_EXEC',
 			label: 'Minimalist Executive',
-			description: 'Tone ringkas, padat, berfokus pada dampak keputusan berlevel tinggi.'
+			description: 'Gaya ringkas, padat, berfokus pada dampak keputusan berlevel tinggi.'
 		}
 	];
 
@@ -464,10 +464,10 @@
 		<input bind:value={languageInput} aria-label="Tambah bahasa" placeholder="Contoh: Bahasa Indonesia" maxlength="120" onkeydown={addLanguage} class="{inputClass} sm:max-w-md" />
 	</section>
 
-	<section class="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+	<section class="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
 		<div>
-			<h2 class="text-lg font-semibold text-slate-950">Gaya CV ATS</h2>
-			<p class="mt-1 text-sm text-slate-500">Pilih gaya penulisan yang digunakan AI untuk menyusun CV ATS-mu.</p>
+			<h2 class="text-lg font-semibold text-slate-950">Gaya CV ATS &amp; Instruksi AI</h2>
+			<p class="mt-1 text-sm text-slate-500">Pilih gaya penulisan CV ATS, lalu tambahkan instruksi khusus jika diperlukan.</p>
 		</div>
 		<div class="grid gap-3 sm:grid-cols-3">
 			{#each atsStyleOptions as option (option.value)}
@@ -485,36 +485,13 @@
 				</button>
 			{/each}
 		</div>
-	</section>
-
-	<section class="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-		<div>
-			<h2 class="text-lg font-semibold text-slate-950">Pengaturan gaya AI</h2>
-			<p class="mt-1 text-sm text-slate-500">Atur gaya bahasa dan instruksi tambahan untuk AI.</p>
+		<div class="border-t border-slate-100 pt-5">
+			<label class="block space-y-1.5 text-sm font-medium text-slate-700">
+				Instruksi khusus <span class="text-xs font-normal text-slate-400">(opsional)</span>
+				<textarea value={profile.aiCustomInstructions ?? ''} rows="4" maxlength="5000" placeholder="Contoh: Tekankan pengalaman memimpin tim dan gunakan bahasa yang lugas." oninput={(e) => patchProfile({ aiCustomInstructions: e.currentTarget.value })} class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"></textarea>
+				<span class="text-[11px] font-normal leading-5 text-slate-400">Instruksi ini akan diikuti AI saat menyusun CV ATS-mu.</span>
+			</label>
 		</div>
-		<label class="block max-w-md space-y-1.5 text-sm font-medium text-slate-700">
-			Tone AI
-			<div class="relative">
-				<select
-					value={profile.aiTonePreference ?? 'professional'}
-					onchange={(e) => patchProfile({ aiTonePreference: e.currentTarget.value })}
-					class="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2.5 pr-10 text-sm font-normal focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-				>
-					<option value="professional">Profesional</option>
-					<option value="confident">Percaya diri</option>
-					<option value="friendly">Ramah</option>
-					<option value="concise">Ringkas</option>
-				</select>
-				<ChevronDown
-					size={16}
-					class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
-				/>
-			</div>
-		</label>
-		<label class="block space-y-1.5 text-sm font-medium text-slate-700">
-			Instruksi khusus
-			<textarea value={profile.aiCustomInstructions ?? ''} rows="4" maxlength="5000" placeholder="Contoh: Tekankan pengalaman memimpin tim dan gunakan bahasa yang lugas." oninput={(e) => patchProfile({ aiCustomInstructions: e.currentTarget.value })} class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-normal"></textarea>
-		</label>
 	</section>
 
 	{#if profile.rawCvText}

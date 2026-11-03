@@ -57,7 +57,6 @@ export interface ParsedCvData {
 	professionalSummary?: string;
 	yearsOfExperience?: number;
 	rawCvText?: string;
-	aiTonePreference?: string;
 	aiCustomInstructions?: string;
 	skills?: string[];
 	languages?: string[];

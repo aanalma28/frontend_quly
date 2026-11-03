@@ -185,7 +185,6 @@ export function normalizeCvData(value: unknown): ParsedCvData {
 		professionalSummary: readString(record, 'professionalSummary', 'professional_summary', 'summary'),
 		yearsOfExperience: readFiniteNumber(record, 'yearsOfExperience', 'years_of_experience'),
 		rawCvText: readString(record, 'rawCvText', 'raw_cv_text'),
-		aiTonePreference: readString(record, 'aiTonePreference', 'ai_tone_preference'),
 		aiCustomInstructions: readString(record, 'aiCustomInstructions', 'ai_custom_instructions'),
 		skills: stringList(record.skills),
 		languages: stringList(record.languages),
@@ -351,7 +350,6 @@ function buildProfilePayload(rawCvData: ParsedCvData): ParsedCvData {
 	const address = (rawCvData.address ?? '').trim();
 	const summary = (rawCvData.professionalSummary ?? '').trim();
 	const rawCvText = (rawCvData.rawCvText ?? '').trim();
-	const aiTone = (rawCvData.aiTonePreference ?? 'professional').trim();
 	const customInstructions = (rawCvData.aiCustomInstructions ?? '').trim();
 	const skills = (rawCvData.skills ?? []).map((skill) => skill.trim()).filter(Boolean);
 	const languages = (rawCvData.languages ?? []).map((lang) => lang.trim()).filter(Boolean);
@@ -368,7 +366,6 @@ function buildProfilePayload(rawCvData: ParsedCvData): ParsedCvData {
 	assertLength(address, 'Alamat', 1000);
 	assertLength(summary, 'Professional summary', 10000);
 	assertLength(rawCvText, 'Teks CV', 100000);
-	assertLength(aiTone, 'Preferensi tone AI', 120);
 	assertLength(customInstructions, 'Instruksi khusus AI', 5000);
 
 	if (
@@ -493,7 +490,6 @@ function buildProfilePayload(rawCvData: ParsedCvData): ParsedCvData {
 		professionalSummary: summary,
 		...(yearsValue !== undefined && yearsValue !== null ? { yearsOfExperience: yearsValue } : {}),
 		rawCvText,
-		aiTonePreference: aiTone,
 		aiCustomInstructions: customInstructions,
 		skills,
 		languages,
