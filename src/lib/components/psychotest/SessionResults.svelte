@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import {
 		Award,
 		CheckCircle2,
@@ -11,7 +12,10 @@
 	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import Alert from '#lib/components/onboarding/Alert.svelte';
 	import WorkCurveChart from './WorkCurveChart.svelte';
+	import { getMyBenefitsApi, type UserBenefitQuota } from '#lib/services/billingApi.js';
 	import { ApiError } from '#lib/utils/api.js';
+	import { benefitAccessMode, freeLifetimeRemaining } from '#lib/utils/benefitAccess.js';
+	import { formatRupiah, isUnlimitedQuota } from '#lib/utils/billing.js';
 	import { categoryLabel, categoryTone, competencyLabel, formatDate } from './labels.js';
 	import {
 		downloadCertificateApi,
@@ -33,14 +37,44 @@
 	let isGenerating = $state(false);
 	let isDownloading = $state(false);
 	let errorMessage = $state<string | null>(null);
+	let psychotestBenefit = $state<UserBenefitQuota | null>(null);
+	let creditBalance = $state(0);
+	let benefitLoading = $state(true);
+	let runtimeBlocked = $state(false);
 
 	const current = $derived<SessionDetail>(generated ?? session);
 	const aiAnalysis = $derived(current.aiAnalysis);
-	const quota = $derived(current.quota.certificate);
-	const quotaExhausted = $derived(quota.limit !== -1 && quota.remaining === 0);
+	const legacyQuota = $derived(current.quota.certificate);
+	const accessMode = $derived(
+		psychotestBenefit ? benefitAccessMode(psychotestBenefit, creditBalance) : null
+	);
+	const legacyQuotaExhausted = $derived(
+		legacyQuota.limit !== -1 && legacyQuota.remaining === 0
+	);
+	const quotaExhausted = $derived(
+		runtimeBlocked ||
+			(psychotestBenefit ? accessMode === 'none' : legacyQuotaExhausted)
+	);
+	const canGenerate = $derived(!quotaExhausted);
 	const completedCount = $derived(
 		current.attempts.filter((attempt) => attempt.status === 'COMPLETED').length
 	);
+
+	onMount(() => {
+		void loadBenefit();
+	});
+
+	async function loadBenefit() {
+		try {
+			const data = await getMyBenefitsApi();
+			psychotestBenefit = data.benefits.find((benefit) => benefit.code === 'PSYCHOTEST') ?? null;
+			creditBalance = data.creditBalance;
+		} catch {
+			psychotestBenefit = null;
+		} finally {
+			benefitLoading = false;
+		}
+	}
 
 	function isCognitive(result: PackageScoreResult | null): result is CognitiveScoreResult {
 		return !!result && result.category === 'COGNITIVE';
@@ -69,19 +103,35 @@
 	}
 
 	function quotaLabel(): string {
-		if (quota.limit === -1) return 'Unlimited';
-		return `${quota.remaining} / ${quota.limit}`;
+		if (benefitLoading) return 'Memeriksa kuota...';
+		if (psychotestBenefit) {
+			const freeLeft = freeLifetimeRemaining(psychotestBenefit);
+			if (freeLeft > 0) return `Gratis ${freeLeft}/${psychotestBenefit.freeLifetimeLimit ?? 0}`;
+			if (isUnlimitedQuota(psychotestBenefit.limit)) return 'Unlimited';
+			if (psychotestBenefit.remaining > 0) {
+				return `${psychotestBenefit.remaining} / ${psychotestBenefit.limit}`;
+			}
+			if (accessMode === 'credit') return `${psychotestBenefit.creditCost} kredit`;
+			return 'Habis';
+		}
+		if (legacyQuota.limit === -1) return 'Unlimited';
+		return `${legacyQuota.remaining} / ${legacyQuota.limit}`;
 	}
 
 	async function generate() {
-		if (isGenerating || quotaExhausted) return;
+		if (isGenerating || !canGenerate) return;
 		isGenerating = true;
 		errorMessage = null;
 		try {
 			generated = await generateCertificateApi(current.sessionId);
+			await loadBenefit();
+			runtimeBlocked = false;
 		} catch (error) {
 			if (error instanceof ApiError) {
-				if (error.status === 503) {
+				if (error.code === 'BENEFIT_QUOTA_EXHAUSTED') {
+					runtimeBlocked = true;
+					errorMessage = `${error.message}. Top-up kredit untuk membuat sertifikat.`;
+				} else if (error.status === 503) {
 					errorMessage = 'Layanan AI sedang tidak tersedia. Silakan coba lagi nanti.';
 				} else if (error.status === 502) {
 					errorMessage = 'Gagal membuat analisis AI. Silakan coba lagi.';
@@ -223,19 +273,28 @@
 						{/if}
 					</div>
 				{:else if isPersonality(attempt.scoreResult)}
+					{@const workStyle = attempt.scoreResult.workStyle ?? []}
+					{@const strengths = attempt.scoreResult.strengths ?? []}
+					{@const improvements = attempt.scoreResult.areasForImprovement ?? []}
 					<div class="mt-4 space-y-4">
 						{#if attempt.scoreResult.personalityType}
 							<span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
 								<Sparkles size={13} /> {attempt.scoreResult.personalityType}
 							</span>
 						{/if}
-						<p class="text-sm leading-6 text-slate-700">{attempt.scoreResult.summary}</p>
+						{#if attempt.scoreResult.summary}
+							<p class="text-sm leading-6 text-slate-700">{attempt.scoreResult.summary}</p>
+						{:else}
+							<p class="text-xs leading-5 text-slate-400">
+								Analisis naratif kepribadian akan tersedia setelah laporan AI dibuat.
+							</p>
+						{/if}
 
-						{#if attempt.scoreResult.workStyle.length > 0}
+						{#if workStyle.length > 0}
 							<div>
 								<p class="text-[11px] font-medium text-slate-500">Gaya kerja</p>
 								<div class="mt-2 flex flex-wrap gap-2">
-									{#each attempt.scoreResult.workStyle as item (item)}
+									{#each workStyle as item (item)}
 										<span class="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-700">{item}</span>
 									{/each}
 								</div>
@@ -243,13 +302,13 @@
 						{/if}
 
 						<div class="grid gap-4 sm:grid-cols-2">
-							{#if attempt.scoreResult.strengths.length > 0}
+							{#if strengths.length > 0}
 								<div>
 									<h4 class="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
 										<CheckCircle2 size={14} class="text-emerald-600" /> Kekuatan
 									</h4>
 									<ul class="mt-2 space-y-1.5">
-										{#each attempt.scoreResult.strengths as item (item)}
+										{#each strengths as item (item)}
 											<li class="flex items-start gap-2 text-sm leading-6 text-slate-600">
 												<span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500"></span>{item}
 											</li>
@@ -257,13 +316,13 @@
 									</ul>
 								</div>
 							{/if}
-							{#if attempt.scoreResult.areasForImprovement.length > 0}
+							{#if improvements.length > 0}
 								<div>
 									<h4 class="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
 										<Award size={14} class="text-amber-600" /> Area pengembangan
 									</h4>
 									<ul class="mt-2 space-y-1.5">
-										{#each attempt.scoreResult.areasForImprovement as item (item)}
+										{#each improvements as item (item)}
 											<li class="flex items-start gap-2 text-sm leading-6 text-slate-600">
 												<span class="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"></span>{item}
 											</li>
@@ -346,6 +405,23 @@
 
 			<p class="mt-4 whitespace-pre-line text-sm leading-7 text-slate-700">{aiAnalysis.summary}</p>
 
+			{#if aiAnalysis.personality?.summary}
+				<div class="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
+					<p class="text-[10px] font-bold uppercase tracking-wide text-indigo-600">Profil kepribadian</p>
+					<p class="mt-1 text-sm font-semibold text-slate-900">
+						{aiAnalysis.personality.personalityType ?? 'Profil'}
+					</p>
+					<p class="mt-1 text-xs leading-5 text-slate-600">{aiAnalysis.personality.summary}</p>
+					{#if (aiAnalysis.personality.workStyle ?? []).length > 0}
+						<div class="mt-2 flex flex-wrap gap-1.5">
+							{#each aiAnalysis.personality.workStyle as item}
+								<span class="rounded-full bg-white px-2.5 py-1 text-[10px] font-medium text-indigo-700 ring-1 ring-indigo-100">{item}</span>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{/if}
+
 			<div class="mt-5 grid gap-4 sm:grid-cols-2">
 				<div>
 					<h3 class="flex items-center gap-2 text-sm font-semibold text-slate-900">
@@ -418,9 +494,22 @@
 				Buat analisis AI dan laporan resmi berdasarkan hasil seluruh paket tes.
 			</p>
 
-			{#if quotaExhausted}
-				<div class="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-					Kuota Generate Sertifikat Anda habis.
+			{#if accessMode === 'credit' && psychotestBenefit && !runtimeBlocked}
+				<div class="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+					<p>
+						Kuota psikotes habis. Generate laporan ini akan memakai
+						<strong>{psychotestBenefit.creditCost} kredit</strong>
+						(± {formatRupiah(psychotestBenefit.overageCostIdr)}).
+					</p>
+					<a href="/billing#kredit-kilat" class="text-xs font-semibold underline">Top-up kredit</a>
+				</div>
+			{:else if quotaExhausted}
+				<div class="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+					<p>Kuota Generate Sertifikat habis dan saldo kredit tidak mencukupi.</p>
+					<div class="flex gap-3">
+						<a href="/billing#kredit-kilat" class="text-xs font-semibold underline">Top-up kredit</a>
+						<a href="/billing#paket" class="text-xs font-semibold underline">Lihat paket</a>
+					</div>
 				</div>
 			{/if}
 
@@ -428,7 +517,7 @@
 				<button
 					type="button"
 					onclick={() => void generate()}
-					disabled={isGenerating || quotaExhausted}
+					disabled={isGenerating || !canGenerate}
 					class="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
 				>
 					{#if isGenerating}

@@ -25,6 +25,7 @@
 	import { tierLabel } from '#lib/components/superadmin/status.js';
 	import { formatDate } from '#lib/components/superadmin/format.js';
 	import RichText from '#lib/components/superadmin/RichText.svelte';
+	import { freeLifetimeRemaining } from '#lib/utils/benefitAccess.js';
 	import {
 		billingPeriodLabel,
 		formatNumber,
@@ -495,6 +496,11 @@
 											</div>
 										{/if}
 
+										{#if (benefit.freeLifetimeLimit ?? 0) > 0}
+											<p class="mt-1 text-[10px] font-semibold {freeLifetimeRemaining(benefit) > 0 ? 'text-emerald-600' : 'text-slate-400'}">
+												Gratis lifetime: {formatNumber(freeLifetimeRemaining(benefit))}/{formatNumber(benefit.freeLifetimeLimit ?? 0)}
+											</p>
+										{/if}
 										<p class="mt-2 text-[10px] leading-4 text-slate-500">
 											{benefitResetLabel(benefit.resetAt)}
 										</p>

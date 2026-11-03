@@ -97,11 +97,15 @@ export interface PersonalityScoreResult {
 	totalQuestions: number;
 	answered: number;
 	personalityType?: string;
-	summary: string;
-	workStyle: string[];
-	strengths: string[];
-	areasForImprovement: string[];
+	summary?: string;
+	workStyle?: string[];
+	strengths?: string[];
+	areasForImprovement?: string[];
 	communicationStyle?: string;
+	items?: Array<{
+		questionText: string;
+		selectedOption: string;
+	}>;
 }
 
 export type PackageScoreResult =
@@ -158,6 +162,14 @@ export interface AiAnalysis {
 	strengths: string[];
 	areasForImprovement: string[];
 	recommendedRoles: string[];
+	personality?: {
+		personalityType: string | null;
+		summary: string | null;
+		workStyle: string[];
+		strengths: string[];
+		areasForImprovement: string[];
+		communicationStyle: string | null;
+	};
 	candidateName: string;
 	certificateNumber: string;
 	issuedAt: string;

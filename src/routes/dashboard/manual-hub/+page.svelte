@@ -48,6 +48,7 @@
 		type JobWorkplaceType
 	} from '#lib/services/jobApi.js';
 	import { ApiError } from '#lib/utils/api.js';
+	import { benefitAccessMode, freeLifetimeRemaining } from '#lib/utils/benefitAccess.js';
 	import { formatNumber, formatRupiah, isUnlimitedQuota } from '#lib/utils/billing.js';
 
 	const limit = 20;
@@ -143,6 +144,11 @@
 
 	const scoringBenefit = $derived(
 		myBenefits?.benefits.find((benefit) => benefit.code === 'JOB_SCORING') ?? null
+	);
+	const scoringAccessMode = $derived(
+		scoringBenefit
+			? benefitAccessMode(scoringBenefit, myBenefits?.creditBalance ?? 0)
+			: null
 	);
 	const scoringBusy = $derived(scoring || preparingScore);
 	const advancedFilterCount = $derived(
@@ -410,18 +416,22 @@
 				return;
 			}
 
-			if (!isUnlimitedQuota(benefit.limit) && benefit.remaining <= 0) {
-				const canContinue =
-					benefit.creditCost > 0 &&
-					benefit.canUseWithCredit &&
-					benefits.creditBalance >= benefit.creditCost;
+			const accessMode = benefitAccessMode(benefit, benefits.creditBalance);
+			if (accessMode === 'credit') {
 				openQuotaDialog(
 					benefit,
-					canContinue ? 'Kuota habis — lanjut dengan kredit?' : 'Kuota dan kredit habis',
-					canContinue
-						? `Kuota scoring habis. Lanjutkan memakai ${benefit.creditCost} kredit (± ${formatRupiah(benefit.overageCostIdr)})? Skor tidak dibuat sebelum kamu memilih.`
-						: `Kuota scoring habis dan saldo kredit tidak cukup. Top-up kredit terlebih dahulu untuk menghitung kecocokan.`,
-					canContinue
+					'Kuota habis — lanjut dengan kredit?',
+					`Kuota scoring habis. Lanjutkan memakai ${benefit.creditCost} kredit (± ${formatRupiah(benefit.overageCostIdr)})? Skor tidak dibuat sebelum kamu memilih.`,
+					true
+				);
+				return;
+			}
+			if (accessMode === 'none') {
+				openQuotaDialog(
+					benefit,
+					'Kuota dan kredit habis',
+					'Kuota scoring habis dan saldo kredit tidak cukup. Top-up kredit terlebih dahulu untuk menghitung kecocokan.',
+					false
 				);
 				return;
 			}
@@ -555,9 +565,15 @@
 			{#if scoringBenefit}
 				<span class="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-[11px] font-semibold text-emerald-700">
 					<Sparkles size={12} class="mr-1 inline" />
-					{isUnlimitedQuota(scoringBenefit.limit)
-						? 'Skor AI tanpa batas'
-						: `${formatNumber(Math.max(scoringBenefit.remaining, 0))} skor tersisa`}
+					{#if freeLifetimeRemaining(scoringBenefit) > 0}
+						Skor AI gratis tersisa {formatNumber(freeLifetimeRemaining(scoringBenefit))}×
+					{:else if isUnlimitedQuota(scoringBenefit.limit)}
+						Skor AI tanpa batas
+					{:else if scoringAccessMode === 'credit'}
+						Skor AI memakai kredit
+					{:else}
+						{formatNumber(Math.max(scoringBenefit.remaining, 0))} skor tersisa
+					{/if}
 				</span>
 			{:else if myBenefits}
 				<span class="rounded-full border border-amber-100 bg-amber-50 px-3 py-1.5 text-[11px] font-semibold text-amber-700">

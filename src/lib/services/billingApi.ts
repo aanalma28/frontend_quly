@@ -16,6 +16,7 @@ export interface PublicPlanBenefitDetail {
 	usageLimit: number;
 	creditCost: number;
 	creditPriceIdr: number;
+	freeLifetimeUses: number;
 	overageCostIdr: number;
 }
 
@@ -74,6 +75,9 @@ export interface UserBenefitQuota {
 	limit: number;
 	used: number;
 	remaining: number;
+	freeLifetimeLimit: number;
+	freeLifetimeUsed: number;
+	freeLifetimeRemaining: number;
 	resetAt: string | null;
 	creditCost: number;
 	creditPriceIdr: number;

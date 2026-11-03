@@ -45,6 +45,7 @@
 		type SessionHistoryItem
 	} from '#lib/services/psychotestApi.js';
 	import { ApiError } from '#lib/utils/api.js';
+	import { freeLifetimeRemaining } from '#lib/utils/benefitAccess.js';
 	import { formatNumber, isUnlimitedQuota } from '#lib/utils/billing.js';
 
 	type Tab = 'prepare' | 'history';
@@ -102,13 +103,17 @@
 				: Math.max(emailBenefit.remaining, 0)
 			: 0
 	);
+	const freeCovered = $derived(
+		Math.min(selectedCount, freeLifetimeRemaining(emailBenefit))
+	);
 	const quotaCovered = $derived(
 		emailBenefit && isUnlimitedQuota(emailBenefit.limit)
-			? selectedCount
-			: Math.min(selectedCount, quotaRemaining)
+			? Math.max(0, selectedCount - freeCovered)
+			: Math.min(Math.max(0, selectedCount - freeCovered), quotaRemaining)
 	);
 	const creditsRequired = $derived(
-		Math.max(0, selectedCount - quotaCovered) * (emailBenefit?.creditCost ?? 1)
+		Math.max(0, selectedCount - freeCovered - quotaCovered) *
+			(emailBenefit?.creditCost ?? 1)
 	);
 	const allSelectedEmailsValid = $derived(
 		selectedOptions.every((option) => isEmail(option.recipientEmail))
@@ -698,6 +703,7 @@
 <ExtractJobModal
 	open={extractOpen}
 	benefit={benefits?.benefits.find((benefit) => benefit.code === 'EXTERNAL_JOB_EXTRACTION') ?? null}
+	creditBalance={benefits?.creditBalance ?? 0}
 	onclose={() => (extractOpen = false)}
 	onadded={addManualJob}
 	onusage={() => void loadBenefits()}

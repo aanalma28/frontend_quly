@@ -62,6 +62,7 @@ export interface PackageBenefitDetail {
 	usageLimit: number;
 	creditCost: number;
 	creditPriceIdr: number;
+	freeLifetimeUses: number;
 	overageCostIdr: number;
 	sortOrder: number;
 	isActive: boolean;
@@ -128,6 +129,7 @@ export interface Benefit {
 	unit: string;
 	creditCost: number;
 	creditPriceIdr: number;
+	freeLifetimeUses: number;
 	overageCostIdr: number;
 	isActive: boolean;
 	packageCount: number;
@@ -142,6 +144,7 @@ export interface BenefitInput {
 	unit?: string;
 	creditCost: number;
 	creditPriceIdr: number;
+	freeLifetimeUses?: number;
 	isActive?: boolean;
 }
 

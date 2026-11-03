@@ -31,6 +31,7 @@
 	let formUnit = $state('usage');
 	let formCreditCost = $state('0');
 	let formCreditPrice = $state('200');
+	let formFreeLifetime = $state('0');
 	let formActive = $state(true);
 	let isSaving = $state(false);
 	let formError = $state<string | null>(null);
@@ -51,6 +52,7 @@
 		formUnit = 'usage';
 		formCreditCost = '0';
 		formCreditPrice = '200';
+		formFreeLifetime = '0';
 		formActive = true;
 		formError = null;
 		modalOpen = true;
@@ -64,6 +66,7 @@
 		formUnit = benefit.unit;
 		formCreditCost = String(benefit.creditCost);
 		formCreditPrice = String(benefit.creditPriceIdr);
+		formFreeLifetime = String(benefit.freeLifetimeUses);
 		formActive = benefit.isActive;
 		formError = null;
 		modalOpen = true;
@@ -84,6 +87,7 @@
 		const unit = formUnit.trim() || 'usage';
 		const creditCost = Number(formCreditCost);
 		const creditPrice = Number(formCreditPrice);
+		const freeLifetimeUses = Number(formFreeLifetime);
 
 		if (!editing) {
 			if (!code) {
@@ -123,6 +127,10 @@
 			formError = 'Harga per kredit harus angka ≥ 0.';
 			return;
 		}
+		if (!Number.isInteger(freeLifetimeUses) || freeLifetimeUses < 0 || freeLifetimeUses > 100) {
+			formError = 'Gratis lifetime harus bilangan bulat 0–100.';
+			return;
+		}
 
 		isSaving = true;
 		errorMessage = null;
@@ -135,6 +143,7 @@
 					unit,
 					creditCost,
 					creditPriceIdr: creditPrice,
+					freeLifetimeUses,
 					isActive: formActive
 				});
 				successMessage = 'Benefit berhasil diperbarui.';
@@ -146,6 +155,7 @@
 					unit,
 					creditCost,
 					creditPriceIdr: creditPrice,
+					freeLifetimeUses,
 					isActive: formActive
 				});
 				successMessage = 'Benefit baru berhasil dibuat.';
@@ -310,7 +320,7 @@
 						</button>
 					</div>
 
-					<div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+					<div class="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
 						<div class="rounded-lg border border-slate-800 bg-slate-950/40 px-2.5 py-2">
 							<p class="text-[9px] uppercase tracking-wide text-slate-500">Kredit/pakai</p>
 							<p class="mt-0.5 font-semibold text-slate-200">{formatNumber(benefit.creditCost)}</p>
@@ -318,6 +328,10 @@
 						<div class="rounded-lg border border-slate-800 bg-slate-950/40 px-2.5 py-2">
 							<p class="text-[9px] uppercase tracking-wide text-slate-500">Harga/kredit</p>
 							<p class="mt-0.5 font-semibold text-slate-200">{formatRupiah(benefit.creditPriceIdr)}</p>
+						</div>
+						<div class="rounded-lg border border-slate-800 bg-slate-950/40 px-2.5 py-2">
+							<p class="text-[9px] uppercase tracking-wide text-slate-500">Gratis lifetime</p>
+							<p class="mt-0.5 font-semibold text-slate-200">{formatNumber(benefit.freeLifetimeUses)}×</p>
 						</div>
 						<div class="rounded-lg border border-slate-800 bg-slate-950/40 px-2.5 py-2">
 							<p class="text-[9px] uppercase tracking-wide text-slate-500">Overage</p>
@@ -402,7 +416,7 @@
 			></textarea>
 		</label>
 
-		<div class="grid gap-4 sm:grid-cols-2">
+		<div class="grid gap-4 sm:grid-cols-3">
 			<label class="block space-y-1.5 text-sm font-medium text-slate-300">
 				Kredit per pemakaian <span class="text-rose-400">*</span>
 				<input bind:value={formCreditCost} type="number" min="0" class={inputClass} />
@@ -410,6 +424,10 @@
 			<label class="block space-y-1.5 text-sm font-medium text-slate-300">
 				Harga per kredit (IDR) <span class="text-rose-400">*</span>
 				<input bind:value={formCreditPrice} type="number" min="0" class={inputClass} />
+			</label>
+			<label class="block space-y-1.5 text-sm font-medium text-slate-300">
+				Gratis lifetime <span class="text-slate-500">(0–100)</span>
+				<input bind:value={formFreeLifetime} type="number" min="0" max="100" class={inputClass} />
 			</label>
 		</div>
 

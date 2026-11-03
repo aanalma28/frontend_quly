@@ -3,6 +3,7 @@
 	import { ArrowLeft, ArrowRight, BriefcaseBusiness, GraduationCap, Plus, Trash2 } from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import { getMyBenefitsApi, type UserBenefitQuota } from '#lib/services/billingApi.js';
+	import { benefitAccessMode, freeLifetimeRemaining } from '#lib/utils/benefitAccess.js';
 	import { formatRupiah, isUnlimitedQuota } from '#lib/utils/billing.js';
 	import {
 		onboarding,
@@ -28,12 +29,14 @@
 	const atsQuotaExhausted = $derived(atsQuota !== null && atsQuota.remaining === 0);
 
 	let cvBenefit = $state<UserBenefitQuota | null>(null);
+	let creditBalance = $state(0);
 	let benefitQuotaLoading = $state(true);
 
 	onMount(async () => {
 		try {
 			const data = await getMyBenefitsApi();
-			cvBenefit = data.benefits.find((benefit) => benefit.code === 'CV_EXTRACTION') ?? null;
+			cvBenefit = data.benefits.find((benefit) => benefit.code === 'CV_GENERATION') ?? null;
+			creditBalance = data.creditBalance;
 		} catch {
 			cvBenefit = null;
 		} finally {
@@ -41,16 +44,12 @@
 		}
 	});
 
-	const benefitQuotaExhausted = $derived(
-		cvBenefit !== null && !isUnlimitedQuota(cvBenefit.limit) && cvBenefit.remaining <= 0
+	const cvAccess = $derived(
+		cvBenefit ? benefitAccessMode(cvBenefit, creditBalance) : null
 	);
-	const usingCredit = $derived(
-		benefitQuotaExhausted &&
-			(cvBenefit?.creditCost ?? 0) > 0 &&
-			Boolean(cvBenefit?.canUseWithCredit)
-	);
+	const usingCredit = $derived(cvAccess === 'credit');
 	const quotaBlocked = $derived(
-		cvBenefit ? benefitQuotaExhausted && !usingCredit : atsQuotaExhausted
+		cvBenefit ? cvAccess === 'none' : atsQuotaExhausted
 	);
 
 	const atsStyleOptions: { value: AtsStyle; label: string; description: string }[] = [
@@ -536,12 +535,19 @@
 		<div class="flex items-center gap-3">
 			{#if cvBenefit}
 				<p class="text-xs text-slate-500">
-					Kuota Generate CV:
+					Generate CV:
 					<span class="font-semibold text-slate-700">
-						{isUnlimitedQuota(cvBenefit.limit)
-							? 'Tanpa batas'
-							: `${Math.max(cvBenefit.remaining, 0)}/${cvBenefit.limit}`}
+						{#if freeLifetimeRemaining(cvBenefit) > 0}
+							Gratis {freeLifetimeRemaining(cvBenefit)}/{cvBenefit.freeLifetimeLimit ?? 0}
+						{:else if isUnlimitedQuota(cvBenefit.limit)}
+							Tanpa batas
+						{:else}
+							{Math.max(cvBenefit.remaining, 0)}/{cvBenefit.limit}
+						{/if}
 					</span>
+					{#if usingCredit}
+						<span class="text-amber-600">· {cvBenefit.creditCost} kredit</span>
+					{/if}
 				</p>
 			{:else if atsQuota}
 				<p class="text-xs text-slate-500">

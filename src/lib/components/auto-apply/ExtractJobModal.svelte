@@ -15,17 +15,19 @@
 	import type { AutoApplyJobOption } from '#lib/services/autoApplyApi.js';
 	import type { UserBenefitQuota } from '#lib/services/billingApi.js';
 	import { ApiError } from '#lib/utils/api.js';
-	import { formatRupiah } from '#lib/utils/billing.js';
+	import { benefitAccessMode, freeLifetimeRemaining } from '#lib/utils/benefitAccess.js';
+	import { formatNumber, formatRupiah, isUnlimitedQuota } from '#lib/utils/billing.js';
 
 	interface Props {
 		open: boolean;
 		benefit?: UserBenefitQuota | null;
+		creditBalance?: number;
 		onclose: () => void;
 		onadded: (job: AutoApplyJobOption) => void;
 		onusage?: () => void;
 	}
 
-	let { open, benefit = null, onclose, onadded, onusage }: Props = $props();
+	let { open, benefit = null, creditBalance = 0, onclose, onadded, onusage }: Props = $props();
 
 	let mode = $state<'text' | 'image'>('text');
 	let text = $state('');
@@ -38,6 +40,10 @@
 	let usageMessage = $state<string | null>(null);
 
 	const cost = $derived(benefit?.creditCost ?? 2);
+	const accessMode = $derived(
+		benefit ? benefitAccessMode(benefit, creditBalance) : null
+	);
+	const blocked = $derived(benefit !== null && accessMode === 'none');
 
 	$effect(() => {
 		if (typeof document === 'undefined' || !open) return;
@@ -96,7 +102,7 @@
 	}
 
 	async function analyse() {
-		if (isLoading) return;
+		if (isLoading || blocked) return;
 		error = null;
 		formError = null;
 		result = null;
@@ -197,9 +203,22 @@
 			<div class="space-y-4 px-5 py-5 sm:px-6">
 				<div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-2.5">
 					<p class="flex items-center gap-1.5 text-xs text-amber-800">
-						<Sparkles size={14} /> Biaya ekstraksi: <strong>{cost} kredit</strong>
+						<Sparkles size={14} />
 						{#if benefit}
-							<span class="text-amber-700/70">(± {formatRupiah(benefit.overageCostIdr)})</span>
+							{#if freeLifetimeRemaining(benefit) > 0}
+								Ekstraksi gratis tersisa <strong>{formatNumber(freeLifetimeRemaining(benefit))}×</strong>
+							{:else if isUnlimitedQuota(benefit.limit)}
+								Kuota ekstraksi: <strong>tanpa batas</strong>
+							{:else if benefit.remaining > 0}
+								Sisa kuota ekstraksi: <strong>{formatNumber(benefit.remaining)}/{formatNumber(benefit.limit)}</strong>
+							{:else if accessMode === 'credit'}
+								Kuota habis · akan memakai <strong>{cost} kredit</strong>
+								<span class="text-amber-700/70">(± {formatRupiah(benefit.overageCostIdr)})</span>
+							{:else}
+								<strong>Kuota &amp; kredit tidak cukup</strong>
+							{/if}
+						{:else}
+							Biaya ekstraksi: <strong>{cost} kredit</strong>
 						{/if}
 					</p>
 					<a href="/billing#kredit-kilat" class="text-[11px] font-semibold text-amber-800 underline">Top-up kredit</a>
@@ -268,7 +287,7 @@
 					<button
 						type="button"
 						onclick={() => void analyse()}
-						disabled={isLoading}
+						disabled={isLoading || blocked}
 						class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
 					>
 						{#if isLoading}
