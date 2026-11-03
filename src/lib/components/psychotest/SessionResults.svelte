@@ -128,9 +128,13 @@
 			runtimeBlocked = false;
 		} catch (error) {
 			if (error instanceof ApiError) {
-				if (error.code === 'BENEFIT_QUOTA_EXHAUSTED') {
+				if (
+					error.code === 'BENEFIT_QUOTA_EXHAUSTED' ||
+					error.code === 'CERTIFICATE_QUOTA_EXHAUSTED' ||
+					error.code === 'PERSONALITY_QUOTA_EXHAUSTED'
+				) {
 					runtimeBlocked = true;
-					errorMessage = `${error.message}. Top-up kredit untuk membuat sertifikat.`;
+					errorMessage = `${error.message}. Top-up kredit atau periksa kuota paketmu.`;
 				} else if (error.status === 503) {
 					errorMessage = 'Layanan AI sedang tidak tersedia. Silakan coba lagi nanti.';
 				} else if (error.status === 502) {
@@ -276,6 +280,7 @@
 					{@const workStyle = attempt.scoreResult.workStyle ?? []}
 					{@const strengths = attempt.scoreResult.strengths ?? []}
 					{@const improvements = attempt.scoreResult.areasForImprovement ?? []}
+					{@const items = attempt.scoreResult.items ?? []}
 					<div class="mt-4 space-y-4">
 						{#if attempt.scoreResult.personalityType}
 							<span class="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
@@ -288,6 +293,23 @@
 							<p class="text-xs leading-5 text-slate-400">
 								Analisis naratif kepribadian akan tersedia setelah laporan AI dibuat.
 							</p>
+						{/if}
+
+						{#if items.length > 0}
+							<details class="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3">
+								<summary class="cursor-pointer text-xs font-semibold text-slate-700">
+									Lihat jawaban tersimpan ({items.length})
+								</summary>
+								<ol class="mt-3 space-y-2">
+									{#each items as item, index (index)}
+										<li class="text-xs leading-5 text-slate-600">
+											<span class="font-medium text-slate-800">{index + 1}.</span>
+											{item.questionText}
+											<span class="font-semibold text-indigo-700">— {item.selectedOption}</span>
+										</li>
+									{/each}
+								</ol>
+							</details>
 						{/if}
 
 						{#if workStyle.length > 0}
@@ -487,6 +509,14 @@
 						<Download size={16} /> Unduh Laporan Resmi &amp; Sertifikat PDF
 					{/if}
 				</button>
+				<a
+					href={`/verify/psychotest/${current.sessionId}`}
+					target="_blank"
+					rel="noreferrer"
+					class="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-violet-200 bg-white px-5 text-sm font-semibold text-violet-700 transition hover:bg-violet-50"
+				>
+					<QrCode size={16} /> Halaman Verifikasi
+				</a>
 				<span class="text-xs text-slate-500">Diterbitkan {formatDate(aiAnalysis.issuedAt)}</span>
 			</div>
 		{:else}

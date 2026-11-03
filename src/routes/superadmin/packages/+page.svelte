@@ -888,6 +888,10 @@
 									<span>{formatRupiah(selectedBenefit.creditPriceIdr)}/kredit</span>
 									<span>·</span>
 									<span>overage {formatRupiah(selectedBenefit.overageCostIdr)}</span>
+									{#if selectedBenefit.freeLifetimeUses > 0}
+										<span>·</span>
+										<span class="text-emerald-400">gratis {selectedBenefit.freeLifetimeUses}×</span>
+									{/if}
 								{/if}
 								<label class="ml-auto inline-flex cursor-pointer items-center gap-1.5 text-slate-400">
 									<input

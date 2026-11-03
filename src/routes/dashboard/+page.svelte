@@ -175,15 +175,15 @@
 			<ArrowRight size={17} class="text-slate-400" />
 		</a>
 		<a
-			href="/psychotest"
+			href="/dashboard/psychotest"
 			class="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50/30"
 		>
 			<span class="flex size-11 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
 				<Sparkles size={20} />
 			</span>
 			<span class="min-w-0 flex-1">
-				<span class="block text-sm font-semibold text-slate-900">Latihan psikotes</span>
-				<span class="mt-1 block text-xs text-slate-500">Asah fokus dengan tes Pauli dan Kraepelin.</span>
+				<span class="block text-sm font-semibold text-slate-900">Tes psikotes</span>
+				<span class="mt-1 block text-xs text-slate-500">Ikuti sesi resmi dan unduh laporan AI.</span>
 			</span>
 			<ArrowRight size={17} class="text-slate-400" />
 		</a>

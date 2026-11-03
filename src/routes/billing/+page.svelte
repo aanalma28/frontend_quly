@@ -36,7 +36,7 @@
 
 	let plans = $state<PublicBillingPlan[]>([]);
 	let topupPackages = $state<TopupPackage[]>([]);
-	let paygPrice = $state(500);
+	let paygPrice = $state(200);
 	let plansLoading = $state(true);
 	let plansError = $state<string | null>(null);
 

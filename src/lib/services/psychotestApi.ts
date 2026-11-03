@@ -1,4 +1,4 @@
-import { apiRequest } from '#lib/utils/api.js';
+import { apiRequest, getApiUrl } from '#lib/utils/api.js';
 
 /**
  * Psychotest (user-side) API client — session-centric.
@@ -245,6 +245,16 @@ export interface SessionHistoryResponse {
 	items: SessionHistoryItem[];
 }
 
+export interface PsychotestVerification {
+	valid: boolean;
+	certificateNumber?: string | null;
+	candidateName?: string | null;
+	issuedAt?: string | null;
+	competencyLevel?: CompetencyLevel | null;
+	overallScore?: number | null;
+	status?: SessionStatus;
+}
+
 /** Available psychotest packages (array, not wrapped). */
 export async function getPackagesApi(): Promise<PsychotestPackage[]> {
 	const response = await apiRequest('psychotest/packages');
@@ -308,4 +318,30 @@ export async function generateCertificateApi(sessionId: string): Promise<Session
 export async function downloadCertificateApi(sessionId: string): Promise<Blob> {
 	const response = await apiRequest(`psychotest/session/${sessionId}/certificate`);
 	return await response.blob();
+}
+
+/**
+ * Public certificate verification. No Authorization header is needed because
+ * this endpoint is also used by the QR-code landing page.
+ */
+export async function verifyPsychotestApi(
+	sessionId: string
+): Promise<PsychotestVerification> {
+	const response = await fetch(
+		getApiUrl(`psychotest/verify/${encodeURIComponent(sessionId)}`),
+		{
+			headers: { Accept: 'application/json' },
+			signal: AbortSignal.timeout(10_000)
+		}
+	);
+
+	// Malformed UUIDs are rejected with 400; unknown sessions return valid:false.
+	if (response.status === 400 || response.status === 404) {
+		return { valid: false };
+	}
+	if (!response.ok) {
+		throw new Error(`Verifikasi sertifikat gagal (${response.status}).`);
+	}
+
+	return (await response.json()) as PsychotestVerification;
 }
