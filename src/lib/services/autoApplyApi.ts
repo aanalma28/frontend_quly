@@ -42,10 +42,13 @@ export interface ExtractionUsage {
 }
 
 export interface ExtractedJob {
+	jobId?: string | null;
 	companyName: string | null;
 	jobTitle: string | null;
 	recipientEmail: string | null;
 	description: string | null;
+	subjectFormat?: string | null;
+	applicationInstructions?: string | null;
 }
 
 export interface ExternalJobExtractionResult {
@@ -76,6 +79,8 @@ export interface EmailPreviewInput {
 	jobTitle?: string;
 	companyName?: string;
 	description?: string;
+	subjectFormat?: string;
+	applicationInstructions?: string;
 }
 
 export interface EmailPreviewResponse {
@@ -105,6 +110,8 @@ export interface PrepareApplicationItem {
 	companyName?: string;
 	recipientEmail: string;
 	description?: string;
+	subjectFormat?: string;
+	applicationInstructions?: string;
 	emailSubject?: string;
 	emailBody?: string;
 }
@@ -121,6 +128,7 @@ export interface PreparedApplication {
 	companyName: string;
 	recipientEmail: string;
 	status: string;
+	scheduledAt?: string | null;
 	error?: string;
 }
 
@@ -140,6 +148,13 @@ export async function prepareAutoApplyApi(
 	return (await response.json()) as PrepareAutoApplyResponse;
 }
 
+export type AutoApplyApplicationStatus =
+	| 'PENDING'
+	| 'SENT'
+	| 'READ'
+	| 'REPLIED'
+	| 'FAILED';
+
 export interface AutoApplyApplication {
 	id: string;
 	jobId: string | null;
@@ -147,7 +162,8 @@ export interface AutoApplyApplication {
 	companyName: string;
 	recipientEmail: string;
 	subject: string;
-	status: 'PENDING' | 'SENT' | 'READ' | 'REPLIED' | 'FAILED';
+	status: AutoApplyApplicationStatus;
+	scheduledAt: string | null;
 	sentAt: string | null;
 	readAt: string | null;
 	repliedAt: string | null;
@@ -179,6 +195,19 @@ export async function getAutoApplyApplicationApi(id: string): Promise<AutoApplyA
 	return (await response.json()) as AutoApplyApplication;
 }
 
+/** Manually mark an application as READ or REPLIED. */
+export async function updateAutoApplyApplicationStatusApi(
+	id: string,
+	status: 'READ' | 'REPLIED'
+): Promise<AutoApplyApplication> {
+	const response = await apiRequest(`auto-apply/applications/${id}/status`, {
+		method: 'PATCH',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ status })
+	});
+	return (await response.json()) as AutoApplyApplication;
+}
+
 export interface AutoApplyJobOption {
 	key: string;
 	source: 'bookmark' | 'manual';
@@ -187,6 +216,8 @@ export interface AutoApplyJobOption {
 	companyName: string;
 	recipientEmail: string;
 	description?: string;
+	subjectFormat?: string;
+	applicationInstructions?: string;
 	location?: string;
 	workplaceType?: string;
 	employmentType?: string;

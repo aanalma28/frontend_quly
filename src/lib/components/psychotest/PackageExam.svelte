@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { ArrowLeft, ArrowRight, Clock, Send } from '@lucide/svelte';
+	import { beforeNavigate, goto } from '$app/navigation';
+	import { AlertTriangle, ArrowLeft, ArrowRight, Clock, Send } from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import Alert from '#lib/components/onboarding/Alert.svelte';
 	import { categoryLabel, categoryTone } from './labels.js';
@@ -34,6 +35,20 @@
 	let timerId: ReturnType<typeof setInterval> | undefined;
 	let deadline = 0;
 	let sessionStartAt = 0;
+
+	let leaveConfirmOpen = $state(false);
+	let allowNavigation = $state(false);
+	let pendingNavigation = $state<string | null>(null);
+
+	beforeNavigate((navigation) => {
+		if (allowNavigation || questions.length === 0) return;
+		// Let the native beforeunload dialog handle tab close/refresh.
+		if (navigation.willUnload) return;
+		navigation.cancel();
+		stopTimer();
+		pendingNavigation = navigation.to?.url.href ?? null;
+		leaveConfirmOpen = true;
+	});
 
 	const currentQuestion = $derived<PsychotestQuestion | null>(questions[currentIndex] ?? null);
 	const answeredCount = $derived(questions.filter((q) => answers[q.id]).length);
@@ -128,9 +143,32 @@
 		}
 	}
 
+	function stayInTest() {
+		leaveConfirmOpen = false;
+		pendingNavigation = null;
+		resumeTimer();
+	}
+
+	function leaveWithoutSaving() {
+		allowNavigation = true;
+		leaveConfirmOpen = false;
+		const target = pendingNavigation;
+		pendingNavigation = null;
+		if (target) void goto(target);
+	}
+
 	onMount(() => {
 		void loadQuestions();
-		return () => stopTimer();
+		const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+			if (allowNavigation || questions.length === 0) return;
+			event.preventDefault();
+			event.returnValue = '';
+		};
+		window.addEventListener('beforeunload', handleBeforeUnload);
+		return () => {
+			stopTimer();
+			window.removeEventListener('beforeunload', handleBeforeUnload);
+		};
 	});
 </script>
 
@@ -266,5 +304,48 @@
 				Masih ada {totalCount - answeredCount} soal yang belum terjawab (akan dihitung sebagai dilewati).
 			</p>
 		{/if}
+	</div>
+{/if}
+
+{#if leaveConfirmOpen}
+	<div
+		class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+		role="alertdialog"
+		aria-modal="true"
+		aria-labelledby="psychotest-leave-title"
+		aria-describedby="psychotest-leave-description"
+	>
+		<div class="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
+			<div class="flex items-start gap-3">
+				<span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+					<AlertTriangle size={22} />
+				</span>
+				<div>
+					<h3 id="psychotest-leave-title" class="text-lg font-bold tracking-tight text-slate-950">
+						Progres psikotes belum tersimpan
+					</h3>
+					<p id="psychotest-leave-description" class="mt-1 text-sm leading-6 text-slate-600">
+						Jawaban dan timer paket ini tidak akan tersimpan jika kamu keluar sekarang.
+						Selesaikan paket terlebih dahulu agar progresmu aman.
+					</p>
+				</div>
+			</div>
+			<div class="mt-5 flex flex-wrap justify-end gap-2">
+				<button
+					type="button"
+					onclick={leaveWithoutSaving}
+					class="inline-flex h-10 items-center justify-center rounded-lg px-4 text-xs font-semibold text-rose-600 transition hover:bg-rose-50"
+				>
+					Keluar tanpa menyimpan
+				</button>
+				<button
+					type="button"
+					onclick={stayInTest}
+					class="inline-flex h-10 items-center justify-center rounded-lg bg-indigo-600 px-4 text-xs font-semibold text-white transition hover:bg-indigo-700"
+				>
+					Lanjutkan tes
+				</button>
+			</div>
+		</div>
 	</div>
 {/if}

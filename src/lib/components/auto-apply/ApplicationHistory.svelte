@@ -19,11 +19,24 @@
 		response: AutoApplyApplicationsResponse | null;
 		loading: boolean;
 		error: string | null;
+		updatingId: string | null;
 		onrefresh: () => void;
 		onpage: (page: number) => void;
+		onstatus: (
+			id: string,
+			status: 'READ' | 'REPLIED'
+		) => void;
 	}
 
-	let { response, loading, error, onrefresh, onpage }: Props = $props();
+	let {
+		response,
+		loading,
+		error,
+		updatingId,
+		onrefresh,
+		onpage,
+		onstatus
+	}: Props = $props();
 
 	const statusLabel: Record<AutoApplyApplication['status'], string> = {
 		PENDING: 'Dalam antrean',
@@ -124,10 +137,45 @@
 						</div>
 						<div class="shrink-0 text-left text-[10px] text-slate-400 sm:text-right">
 							<p>Dibuat {dateLabel(application.createdAt)}</p>
+							{#if application.scheduledAt}<p>Dijadwalkan {dateLabel(application.scheduledAt)}</p>{/if}
 							{#if application.sentAt}<p class="text-indigo-500">Terkirim {dateLabel(application.sentAt)}</p>{/if}
 							{#if application.readAt}<p class="text-emerald-600">Dibaca {dateLabel(application.readAt)}</p>{/if}
+							{#if application.repliedAt}<p class="text-violet-600">Dibalas {dateLabel(application.repliedAt)}</p>{/if}
 						</div>
 					</div>
+
+					{#if application.status === 'SENT' || application.status === 'READ'}
+						<div class="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+							{#if application.status === 'SENT'}
+								<button
+									type="button"
+									onclick={() => onstatus(application.id, 'READ')}
+									disabled={updatingId === application.id}
+									class="inline-flex h-8 items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-[10px] font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+								>
+									{#if updatingId === application.id}
+										<Spinner size={12} label="Memperbarui status" />
+									{:else}
+										<CheckCircle2 size={12} />
+									{/if}
+									Tandai dibaca
+								</button>
+							{/if}
+							<button
+								type="button"
+								onclick={() => onstatus(application.id, 'REPLIED')}
+								disabled={updatingId === application.id}
+								class="inline-flex h-8 items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2.5 text-[10px] font-semibold text-violet-700 transition hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60"
+							>
+								{#if updatingId === application.id}
+									<Spinner size={12} label="Memperbarui status" />
+								{:else}
+									<MailCheck size={12} />
+								{/if}
+								Tandai dibalas
+							</button>
+						</div>
+					{/if}
 				</article>
 			{/each}
 		</div>

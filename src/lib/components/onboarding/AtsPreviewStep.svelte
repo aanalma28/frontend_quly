@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { ArrowRight, CheckCircle2, Download } from '@lucide/svelte';
-	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
+	import { AlertTriangle, ArrowRight, CheckCircle2, Download } from '@lucide/svelte';
+	import { beforeNavigate, goto } from '$app/navigation';
 	import CvScoreCard from '#lib/components/onboarding/CvScoreCard.svelte';
 	import { onboarding, backToUpload } from '#lib/stores/onboardingStore.js';
 	import type { CvScore } from '#lib/services/onboardingApi.js';
@@ -77,6 +78,30 @@
 		)
 	);
 
+	let hasDownloaded = $state(false);
+	let allowNavigation = $state(false);
+	let pendingNavigation = $state<string | null>(null);
+	let leaveConfirmOpen = $state(false);
+
+	beforeNavigate((navigation) => {
+		if (allowNavigation || hasDownloaded || !result) return;
+		// Let the native beforeunload dialog handle tab close/refresh.
+		if (navigation.willUnload) return;
+		navigation.cancel();
+		pendingNavigation = navigation.to?.url.href ?? null;
+		leaveConfirmOpen = true;
+	});
+
+	onMount(() => {
+		const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+			if (allowNavigation || hasDownloaded || !result) return;
+			event.preventDefault();
+			event.returnValue = '';
+		};
+		window.addEventListener('beforeunload', handleBeforeUnload);
+		return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+	});
+
 	function fmtDate(value?: string | null): string {
 		if (!value) return '';
 		return value.slice(0, 10);
@@ -91,7 +116,26 @@
 	}
 
 	function downloadPdf() {
+		hasDownloaded = true;
 		window.print();
+	}
+
+	function downloadFirst() {
+		leaveConfirmOpen = false;
+		downloadPdf();
+	}
+
+	function cancelLeave() {
+		leaveConfirmOpen = false;
+		pendingNavigation = null;
+	}
+
+	function leaveWithoutDownload() {
+		allowNavigation = true;
+		leaveConfirmOpen = false;
+		const target = pendingNavigation;
+		pendingNavigation = null;
+		if (target) void goto(target);
 	}
 </script>
 
@@ -278,3 +322,53 @@
 		</div>
 	</div>
 </section>
+
+{#if leaveConfirmOpen}
+	<div
+		class="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+		role="alertdialog"
+		aria-modal="true"
+		aria-labelledby="ats-leave-title"
+		aria-describedby="ats-leave-description"
+	>
+		<div class="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
+			<div class="flex items-start gap-3">
+				<span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+					<AlertTriangle size={22} />
+				</span>
+				<div>
+					<h3 id="ats-leave-title" class="text-lg font-bold tracking-tight text-slate-950">
+						CV ATS belum diunduh
+					</h3>
+					<p id="ats-leave-description" class="mt-1 text-sm leading-6 text-slate-600">
+						Kamu sudah memiliki pratinjau CV ATS hasil AI, tetapi belum mengunduhnya sebagai
+						PDF. Unduh terlebih dahulu agar hasilnya tidak hilang sebelum berpindah halaman.
+					</p>
+				</div>
+			</div>
+			<div class="mt-5 flex flex-wrap justify-end gap-2">
+				<button
+					type="button"
+					onclick={cancelLeave}
+					class="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 px-4 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+				>
+					Tetap di halaman
+				</button>
+				<button
+					type="button"
+					onclick={leaveWithoutDownload}
+					class="inline-flex h-10 items-center justify-center rounded-lg px-4 text-xs font-semibold text-rose-600 transition hover:bg-rose-50"
+				>
+					Keluar tanpa unduh
+				</button>
+				<button
+					type="button"
+					onclick={downloadFirst}
+					class="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-4 text-xs font-semibold text-white transition hover:bg-indigo-700"
+				>
+					<Download size={14} /> Unduh PDF dulu
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}

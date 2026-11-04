@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Mail, Send, Sparkles, X } from '@lucide/svelte';
+	import { AlertTriangle, Mail, Send, Sparkles, X } from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import type { AutoApplyJobOption, EmailDraftPreview } from '#lib/services/autoApplyApi.js';
 	import { formatNumber } from '#lib/utils/billing.js';
@@ -82,6 +82,12 @@
 			</header>
 
 			<div class="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+				<div class="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] leading-5 text-amber-800">
+					<AlertTriangle size={15} class="mt-0.5 shrink-0" />
+					<span>
+						Draft dibuat AI dan bisa tidak akurat. Periksa ulang <strong>email HRD, subjek, dan body email</strong> untuk setiap loker sebelum mengirim.
+					</span>
+				</div>
 				{#if options.length === 0}
 					<p class="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
 						Belum ada loker terpilih.

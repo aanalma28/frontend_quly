@@ -14,6 +14,7 @@
 	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import GmailIcon from '#lib/components/ui/GmailIcon.svelte';
 	import ApplicationHistory from '#lib/components/auto-apply/ApplicationHistory.svelte';
+	import AutoApplyJobDetailModal from '#lib/components/auto-apply/AutoApplyJobDetailModal.svelte';
 	import DocumentSetup from '#lib/components/auto-apply/DocumentSetup.svelte';
 	import EmailPreviewDrawer from '#lib/components/auto-apply/EmailPreviewDrawer.svelte';
 	import ExtractJobModal from '#lib/components/auto-apply/ExtractJobModal.svelte';
@@ -24,6 +25,7 @@
 		listAutoApplyApplicationsApi,
 		prepareAutoApplyApi,
 		previewEmailApi,
+		updateAutoApplyApplicationStatusApi,
 		type AutoApplyApplicationsResponse,
 		type AutoApplyJobOption,
 		type EmailDraftPreview
@@ -38,7 +40,15 @@
 		uploadCvApi,
 		type CvFileMetadata
 	} from '#lib/services/cvApi.js';
-	import { listJobsApi } from '#lib/services/jobApi.js';
+	import {
+		getJobApi,
+		listJobsApi,
+		scoreJobApi,
+		type JobDetail,
+		type JobMatchScore,
+		type JobScoringResult,
+		type JobScoreUsage
+	} from '#lib/services/jobApi.js';
 	import {
 		downloadCertificateApi,
 		getSessionsApi,
@@ -77,6 +87,16 @@
 	let bookmarkError = $state<string | null>(null);
 	let extractOpen = $state(false);
 
+	let detailOpen = $state(false);
+	let detailOption = $state<AutoApplyJobOption | null>(null);
+	let jobDetail = $state<JobDetail | null>(null);
+	let loadingDetail = $state(false);
+	let scoringKey = $state<string | null>(null);
+	let selectedScore = $state<JobMatchScore | JobScoringResult | null>(null);
+	let selectedScoreUsage = $state<JobScoreUsage | null>(null);
+	let scoreMessage = $state<string | null>(null);
+	let detailError = $state<string | null>(null);
+
 	let benefits = $state<MyBenefitsResponse | null>(null);
 	let benefitsLoading = $state(true);
 	let benefitsError = $state<string | null>(null);
@@ -89,6 +109,7 @@
 	let applicationsLoading = $state(false);
 	let applicationsError = $state<string | null>(null);
 	let applicationsPage = $state(1);
+	let updatingApplicationId = $state<string | null>(null);
 
 	const emailBenefit = $derived(
 		benefits?.benefits.find((benefit) => benefit.code === 'EMAIL_APPLICATION') ?? null
@@ -342,6 +363,96 @@
 		);
 	}
 
+	async function openDetail(option: AutoApplyJobOption) {
+		detailOption = option;
+		detailOpen = true;
+		jobDetail = null;
+		selectedScore = null;
+		selectedScoreUsage = null;
+		scoreMessage = null;
+		detailError = null;
+		loadingDetail = false;
+
+		if (!option.jobId) return;
+
+		loadingDetail = true;
+		try {
+			const data = await getJobApi(option.jobId);
+			if (detailOption?.key !== option.key) return;
+			jobDetail = data;
+			selectedScore = data.matchScore;
+		} catch (error) {
+			if (detailOption?.key === option.key) {
+				detailError = errorText(error, 'Detail lowongan belum dapat dimuat.');
+			}
+		} finally {
+			if (detailOption?.key === option.key) loadingDetail = false;
+		}
+	}
+
+	function closeDetail() {
+		detailOpen = false;
+		detailOption = null;
+		jobDetail = null;
+		selectedScore = null;
+		selectedScoreUsage = null;
+		scoreMessage = null;
+		detailError = null;
+	}
+
+	async function scoreSelected() {
+		const option = detailOption;
+		if (!option?.jobId || scoringKey) return;
+
+		scoringKey = option.key;
+		detailError = null;
+		scoreMessage = null;
+		selectedScoreUsage = null;
+		try {
+			const result = await scoreJobApi(option.jobId);
+			selectedScore = result;
+			selectedScoreUsage = result.usage;
+			scoreMessage = `Skor kecocokan ${result.score}/100 berhasil dihitung.`;
+			jobOptions = jobOptions.map((item) =>
+				item.key === option.key ? { ...item, matchScore: result.score } : item
+			);
+			if (jobDetail?.id === option.jobId) {
+				const matchScore: JobMatchScore = {
+					score: result.score,
+					summary: result.summary,
+					strengths: result.strengths,
+					weaknesses: result.weaknesses,
+					suggestions: result.suggestions,
+					matchedSkills: result.matchedSkills,
+					missingSkills: result.missingSkills,
+					updatedAt: result.updatedAt
+				};
+				jobDetail = { ...jobDetail, matchScore };
+			}
+		} catch (error) {
+			if (error instanceof ApiError) {
+				if (
+					error.code === 'BENEFIT_QUOTA_EXHAUSTED' ||
+					error.code === 'JOB_SCORING_QUOTA_NOT_CONFIGURED'
+				) {
+					detailError = `${error.message}. Top-up kredit atau periksa kuota paketmu.`;
+				} else {
+					detailError = error.message;
+				}
+			} else {
+				detailError = errorText(error, 'Skor kecocokan belum dapat dihitung.');
+			}
+		} finally {
+			scoringKey = null;
+		}
+	}
+
+	async function scoreJobOption(option: AutoApplyJobOption) {
+		await openDetail(option);
+		if (!detailOpen || detailOption?.key !== option.key) return;
+		if (option.jobId) await scoreSelected();
+	}
+
 	function selectAll() {
 		jobOptions = jobOptions.map((option) => ({ ...option, selected: true }));
 	}
@@ -360,7 +471,9 @@
 		return {
 			jobTitle: option.jobTitle,
 			companyName: option.companyName,
-			description: option.description
+			description: option.description,
+			subjectFormat: option.subjectFormat,
+			applicationInstructions: option.applicationInstructions
 		};
 	}
 
@@ -425,7 +538,9 @@
 							: {
 									jobTitle: option.jobTitle,
 									companyName: option.companyName,
-									description: option.description
+									description: option.description,
+									subjectFormat: option.subjectFormat,
+									applicationInstructions: option.applicationInstructions
 								}),
 						recipientEmail: option.recipientEmail.trim().toLowerCase(),
 						...(draft?.subject.trim() ? { emailSubject: draft.subject.trim() } : {}),
@@ -469,6 +584,32 @@
 			applicationsError = errorText(error, 'Riwayat lamaran belum dapat dimuat.');
 		} finally {
 			applicationsLoading = false;
+		}
+	}
+
+	async function updateApplicationStatus(id: string, status: 'READ' | 'REPLIED') {
+		if (updatingApplicationId) return;
+		updatingApplicationId = id;
+		try {
+			const updated = await updateAutoApplyApplicationStatusApi(id, status);
+			if (applications) {
+				applications = {
+					...applications,
+					items: applications.items.map((item) =>
+						item.id === id ? { ...item, ...updated } : item
+					)
+				};
+			}
+			showToast(
+				status === 'REPLIED'
+					? 'Lamaran ditandai sudah dibalas.'
+					: 'Lamaran ditandai sudah dibaca.',
+				'success'
+			);
+		} catch (error) {
+			showToast(errorText(error, 'Status lamaran belum dapat diperbarui.'), 'error');
+		} finally {
+			updatingApplicationId = null;
 		}
 	}
 
@@ -626,8 +767,11 @@
 			{emailBenefit}
 			{quotaRemaining}
 			{creditsRequired}
+			{scoringKey}
 			onToggle={toggleOption}
 			onEmailChange={updateEmail}
+			ondetail={openDetail}
+			onscore={scoreJobOption}
 			onselectall={selectAll}
 			onclear={clearSelection}
 			onextract={() => (extractOpen = true)}
@@ -694,8 +838,10 @@
 			response={applications}
 			loading={applicationsLoading}
 			error={applicationsError}
+			updatingId={updatingApplicationId}
 			onrefresh={() => void loadApplications(applicationsPage)}
 			onpage={(page) => void loadApplications(page)}
+			onstatus={(id, status) => void updateApplicationStatus(id, status)}
 		/>
 	{/if}
 </div>
@@ -707,6 +853,20 @@
 	onclose={() => (extractOpen = false)}
 	onadded={addManualJob}
 	onusage={() => void loadBenefits()}
+/>
+
+<AutoApplyJobDetailModal
+	open={detailOpen}
+	option={detailOption}
+	{jobDetail}
+	{loadingDetail}
+	scoring={scoringKey === detailOption?.key}
+	score={selectedScore}
+	scoreUsage={selectedScoreUsage}
+	{scoreMessage}
+	errorMessage={detailError}
+	onclose={closeDetail}
+	onscore={() => void scoreSelected()}
 />
 
 <EmailPreviewDrawer

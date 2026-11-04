@@ -38,6 +38,7 @@
 	let result = $state<ExtractedJob | null>(null);
 	let formError = $state<string | null>(null);
 	let usageMessage = $state<string | null>(null);
+	let reanalyseConfirmOpen = $state(false);
 
 	const cost = $derived(benefit?.creditCost ?? 2);
 	const accessMode = $derived(
@@ -68,6 +69,19 @@
 		revokePreview();
 		isLoading = false;
 		error = null;
+		result = null;
+		formError = null;
+		usageMessage = null;
+		reanalyseConfirmOpen = false;
+	}
+
+	function requestReanalyse() {
+		if (isLoading) return;
+		reanalyseConfirmOpen = true;
+	}
+
+	function confirmReanalyse() {
+		reanalyseConfirmOpen = false;
 		result = null;
 		formError = null;
 		usageMessage = null;
@@ -129,10 +143,13 @@
 				return;
 			}
 			result = {
+				jobId: response.job?.jobId ?? undefined,
 				companyName: response.job?.companyName ?? '',
 				jobTitle: response.job?.jobTitle ?? '',
 				recipientEmail: response.job?.recipientEmail ?? '',
-				description: response.job?.description ?? ''
+				description: response.job?.description ?? '',
+				subjectFormat: response.job?.subjectFormat ?? null,
+				applicationInstructions: response.job?.applicationInstructions ?? null
 			};
 			usageMessage = response.charged
 				? `Ekstraksi selesai. ${response.usage.creditsCharged > 0 ? `${response.usage.creditsCharged} kredit terpakai.` : 'Menggunakan kuota paket.'}`
@@ -165,10 +182,13 @@
 		onadded({
 			key: `manual:${crypto.randomUUID()}`,
 			source: 'manual',
+			jobId: result.jobId ?? undefined,
 			jobTitle,
 			companyName,
 			recipientEmail,
 			description: result.description?.trim() || undefined,
+			subjectFormat: result.subjectFormat?.trim() || undefined,
+			applicationInstructions: result.applicationInstructions?.trim() || undefined,
 			needsEmail: !recipientEmail,
 			selected: true
 		});
@@ -300,6 +320,12 @@
 					<div class="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-800">
 						<CheckCircle2 size={15} /> Loker valid. Periksa dan sesuaikan hasil ekstraksi.
 					</div>
+					<div class="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] leading-5 text-amber-800">
+						<AlertTriangle size={15} class="mt-0.5 shrink-0" />
+						<span>
+							AI bisa salah membaca poster atau teks. Periksa ulang <strong>email HRD, perusahaan, posisi, format subjek, dan deskripsi</strong>. Subjek dan body email final tetap harus ditinjau sebelum dikirim.
+						</span>
+					</div>
 					{#if usageMessage}
 						<p class="text-[10px] text-slate-500">{usageMessage}</p>
 					{/if}
@@ -319,6 +345,17 @@
 							<span class="text-[10px] font-normal text-slate-400">Jika kosong, isi email sebelum mengirim lamaran.</span>
 						</label>
 						<label class="space-y-1 text-[11px] font-semibold text-slate-500 sm:col-span-2">
+							Format subjek dari loker (opsional)
+							<input
+								value={result.subjectFormat ?? ''}
+								oninput={(event) => {
+									if (result) result.subjectFormat = event.currentTarget.value;
+								}}
+								placeholder="Contoh: Lamaran [Posisi] - [Nama]"
+								class="h-10 w-full rounded-lg border border-slate-200 px-3 text-xs text-slate-800 outline-none focus:border-indigo-300"
+							/>
+						</label>
+						<label class="space-y-1 text-[11px] font-semibold text-slate-500 sm:col-span-2">
 							Deskripsi
 							<textarea bind:value={result.description} rows="4" class="w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-xs leading-5 text-slate-800 outline-none focus:border-indigo-300"></textarea>
 						</label>
@@ -329,7 +366,7 @@
 					{/if}
 
 					<div class="flex flex-wrap justify-end gap-2">
-						<button type="button" onclick={() => { result = null; error = null; }} class="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 px-4 text-xs font-semibold text-slate-600 hover:bg-slate-50">
+						<button type="button" onclick={requestReanalyse} class="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 px-4 text-xs font-semibold text-slate-600 hover:bg-slate-50">
 							Analisis ulang
 						</button>
 						<button type="button" onclick={addJob} class="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-4 text-xs font-semibold text-white hover:bg-indigo-700">
@@ -340,4 +377,48 @@
 			</div>
 		</div>
 	</div>
+
+	{#if reanalyseConfirmOpen}
+		<div
+			class="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+			role="alertdialog"
+			aria-modal="true"
+			aria-labelledby="reanalyse-title"
+			aria-describedby="reanalyse-description"
+		>
+			<div class="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
+				<div class="flex items-start gap-3">
+					<span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+						<AlertTriangle size={22} />
+					</span>
+					<div>
+						<h3 id="reanalyse-title" class="text-lg font-bold tracking-tight text-slate-950">
+							Analisis ulang loker?
+						</h3>
+						<p id="reanalyse-description" class="mt-1 text-sm leading-6 text-slate-600">
+							Kuota atau kredit yang sudah terpakai untuk analisis sebelumnya
+							<strong>tidak dapat dikembalikan</strong>. Kamu akan kembali ke input untuk
+							menganalisis ulang.
+						</p>
+					</div>
+				</div>
+				<div class="mt-5 flex flex-wrap justify-end gap-2">
+					<button
+						type="button"
+						onclick={() => (reanalyseConfirmOpen = false)}
+						class="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 px-4 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+					>
+						Batal
+					</button>
+					<button
+						type="button"
+						onclick={confirmReanalyse}
+						class="inline-flex h-10 items-center justify-center rounded-lg bg-amber-600 px-4 text-xs font-semibold text-white transition hover:bg-amber-700"
+					>
+						Ya, analisis ulang
+					</button>
+				</div>
+			</div>
+		</div>
+	{/if}
 {/if}

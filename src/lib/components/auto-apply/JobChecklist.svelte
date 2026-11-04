@@ -3,10 +3,12 @@
 		AlertCircle,
 		Bookmark,
 		BriefcaseBusiness,
+		Eye,
 		MapPin,
 		Plus,
 		Sparkles
 	} from '@lucide/svelte';
+	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import type { AutoApplyJobOption } from '#lib/services/autoApplyApi.js';
 	import type { UserBenefitQuota } from '#lib/services/billingApi.js';
 	import { formatNumber, isUnlimitedQuota } from '#lib/utils/billing.js';
@@ -18,8 +20,11 @@
 		emailBenefit: UserBenefitQuota | null;
 		quotaRemaining: number;
 		creditsRequired: number;
+		scoringKey: string | null;
 		onToggle: (key: string) => void;
 		onEmailChange: (key: string, value: string) => void;
+		ondetail: (option: AutoApplyJobOption) => void;
+		onscore: (option: AutoApplyJobOption) => void;
 		onselectall: () => void;
 		onclear: () => void;
 		onextract: () => void;
@@ -32,8 +37,11 @@
 		emailBenefit,
 		quotaRemaining,
 		creditsRequired,
+		scoringKey,
 		onToggle,
 		onEmailChange,
+		ondetail,
+		onscore,
 		onselectall,
 		onclear,
 		onextract
@@ -81,6 +89,13 @@
 				{/if}
 			{/if}
 		</div>
+	</div>
+
+	<div class="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] leading-5 text-amber-800">
+		<AlertCircle size={14} class="mt-0.5 shrink-0" />
+		<span>
+			Data lowongan dan email HRD bisa berasal dari ekstraksi AI. Periksa ulang <strong>email, subjek, dan body</strong> sebelum mengirim lamaran.
+		</span>
 	</div>
 
 	<div class="flex flex-wrap items-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50/60 px-3 py-2.5 text-[11px]">
@@ -193,6 +208,32 @@
 						</div>
 					</label>
 				{/if}
+
+				<div class="mt-2.5 flex flex-wrap gap-1.5">
+					<button
+						type="button"
+						onclick={() => ondetail(option)}
+						class="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50"
+					>
+						<Eye size={12} /> Detail
+					</button>
+					<button
+						type="button"
+						onclick={() => onscore(option)}
+						disabled={!option.jobId || scoringKey === option.key}
+						title={!option.jobId ? 'Scoring tersedia untuk loker dari database' : 'Hitung kecocokan dengan profilmu'}
+						class="inline-flex h-8 items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 text-[10px] font-semibold text-indigo-700 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
+					>
+						{#if scoringKey === option.key}
+							<Spinner size={12} label="Menghitung skor" /> Menghitung...
+						{:else}
+							<Sparkles size={12} />
+							{option.matchScore !== null && option.matchScore !== undefined
+								? `Skor ${option.matchScore}`
+								: 'Scoring'}
+						{/if}
+					</button>
+				</div>
 			</div>
 		</div>
 	</article>
