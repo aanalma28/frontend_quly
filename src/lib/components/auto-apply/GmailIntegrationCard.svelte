@@ -41,7 +41,14 @@
 				</h2>
 				<p class="mt-1 max-w-xl text-xs leading-5 text-slate-500">
 					Hubungkan Gmail agar Quly dapat mengirim email lamaran beserta CV dan sertifikat
-					psikotes langsung dari akunmu. Quly hanya meminta izin <code class="rounded bg-slate-100 px-1 py-0.5 text-[10px]">gmail.send</code>.
+					psikotes langsung dari akunmu. Quly meminta izin
+					<code class="rounded bg-slate-100 px-1 py-0.5 text-[10px]">gmail.send</code> dan
+					<code class="rounded bg-slate-100 px-1 py-0.5 text-[10px]">gmail.readonly</code> agar
+					balasan HRD dapat dideteksi otomatis.
+				</p>
+				<p class="mt-1.5 max-w-xl text-[10px] leading-4 text-amber-700">
+					Jika Gmail sudah terhubung sebelum fitur balasan otomatis tersedia, putuskan lalu
+					hubungkan ulang agar izin baca aktif.
 				</p>
 			</div>
 		</div>

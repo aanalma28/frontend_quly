@@ -128,6 +128,7 @@
 		</p>
 		<ul class="mt-2 list-disc space-y-1 pl-5">
 			<li>Token Gmail disimpan terenkripsi di server dan tidak dikirim ke browser.</li>
+			<li>Izin baca hanya dipakai untuk mendeteksi balasan HRD pada thread lamaran.</li>
 			<li>Kamu dapat memutuskan Gmail kapan saja dari halaman ini.</li>
 			<li>WhatsApp belum terhubung karena endpoint backend belum tersedia.</li>
 		</ul>
