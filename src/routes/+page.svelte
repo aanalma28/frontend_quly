@@ -456,6 +456,8 @@
 		<div class="footer-links">
 			<a href="#fitur">Fitur</a>
 			<a href="#harga">Harga</a>
+			<a href="/privacy">Kebijakan Privasi</a>
+			<a href="/terms">Syarat &amp; Ketentuan</a>
 			<a href="/auth/login">Masuk</a>
 			<a href="/auth/register">Daftar</a>
 		</div>
@@ -2000,7 +2002,9 @@
 	}
 
 	.footer-links {
-		gap: 19px;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		gap: 12px 19px;
 		margin-left: auto;
 	}
 

@@ -281,8 +281,11 @@
 							class="mt-0.5 h-4 w-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-500"
 						/>
 						<span>
-							Saya menyetujui syarat dan ketentuan serta kebijakan privasi, termasuk penggunaan
-							data saya untuk mencari dan mengirim lamaran kerja atas nama saya.
+							Saya menyetujui
+							<a href="/terms" target="_blank" rel="noreferrer" class="font-semibold text-indigo-700 underline decoration-indigo-200">syarat dan ketentuan</a>
+							serta
+							<a href="/privacy" target="_blank" rel="noreferrer" class="font-semibold text-indigo-700 underline decoration-indigo-200">kebijakan privasi</a>,
+							termasuk penggunaan data saya untuk mencari dan mengirim lamaran kerja atas nama saya.
 						</span>
 					</label>
 					{#if fieldErrors.terms}
