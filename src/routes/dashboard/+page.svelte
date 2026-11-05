@@ -32,7 +32,7 @@
 </script>
 
 <svelte:head>
-	<title>Ringkasan | AI Job Hunter</title>
+	<title>Ringkasan | Quly</title>
 	<meta
 		name="description"
 		content="Pantau paket, kuota lamaran, dan saldo Kredit Kilat akunmu."

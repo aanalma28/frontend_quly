@@ -3,14 +3,9 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { get } from 'svelte/store';
-	import {
-		Activity,
-		BookOpen,
-		LayoutList,
-		LogOut,
-		ShieldAlert
-	} from '@lucide/svelte';
+	import { Activity, BookOpen, LayoutList, LogOut } from '@lucide/svelte';
 	import { auth, getUserRole, initializeAuth, logout } from '#lib/stores/auth.js';
+	import QulyLogo from '#lib/components/ui/QulyLogo.svelte';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
@@ -45,7 +40,7 @@
 </script>
 
 <svelte:head>
-	<title>Admin Psikotes | AI Job Hunter</title>
+	<title>Admin Psikotes | Quly</title>
 </svelte:head>
 
 {#if checking}
@@ -57,14 +52,9 @@
 		<aside
 			class="border-b border-slate-800 bg-slate-950 px-5 py-4 text-white md:fixed md:inset-y-0 md:left-0 md:z-20 md:flex md:w-64 md:flex-col md:border-b-0 md:px-4 md:py-6"
 		>
-			<a href="/admin/psychotest/packages" class="flex items-center gap-3 px-2">
-				<span class="flex size-10 items-center justify-center rounded-xl bg-indigo-500 text-white">
-					<ShieldAlert size={20} strokeWidth={1.9} />
-				</span>
-				<span>
-					<span class="block text-sm font-bold tracking-tight">Admin Panel</span>
-					<span class="block text-xs text-slate-400">Manajemen psikotes</span>
-				</span>
+			<a href="/admin/psychotest/packages" class="flex flex-col items-start gap-1 px-2">
+				<QulyLogo size={32} tone="white" />
+				<span class="text-xs text-slate-400">Admin panel · Manajemen psikotes</span>
 			</a>
 
 			<p class="mt-7 px-2 text-[11px] font-bold uppercase tracking-[0.15em] text-slate-500 md:mt-10">

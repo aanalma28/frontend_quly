@@ -8,7 +8,7 @@
 </script>
 
 <svelte:head>
-	<title>Auto-Apply | AI Job Hunter</title>
+	<title>Auto-Apply | Quly</title>
 </svelte:head>
 
 <main class="flex min-h-screen items-center justify-center bg-[#f7f8fc] px-4">

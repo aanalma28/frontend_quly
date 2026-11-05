@@ -659,7 +659,7 @@
 </script>
 
 <svelte:head>
-	<title>Auto-Apply | AI Job Hunter</title>
+	<title>Auto-Apply | Quly</title>
 	<meta
 		name="description"
 		content="Siapkan CV, pilih lowongan, tinjau email AI, dan kirim lamaran otomatis lewat Gmail."

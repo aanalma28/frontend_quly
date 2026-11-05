@@ -64,7 +64,7 @@
 </script>
 
 <svelte:head>
-	<title>Psikotes | AI Job Hunter</title>
+	<title>Psikotes | Quly</title>
 	<meta name="description" content="Ikuti tes psikotes untuk melengkapi profil kariermu." />
 </svelte:head>
 

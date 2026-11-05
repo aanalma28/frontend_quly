@@ -10,7 +10,6 @@
 		ChartColumn,
 		Coins,
 		CreditCard,
-		Crown,
 		LayoutDashboard,
 		ListChecks,
 		LogOut,
@@ -19,6 +18,7 @@
 		Users
 	} from '@lucide/svelte';
 	import { auth, getUserRole, initializeAuth, logout } from '#lib/stores/auth.js';
+	import QulyLogo from '#lib/components/ui/QulyLogo.svelte';
 	import type { Component } from 'svelte';
 	import type { LayoutProps } from './$types';
 
@@ -96,7 +96,7 @@
 </script>
 
 <svelte:head>
-	<title>Superadmin | AI Job Hunter</title>
+	<title>Superadmin | Quly</title>
 </svelte:head>
 
 {#if checking}
@@ -111,14 +111,9 @@
 		<aside
 			class="border-b border-slate-800 bg-slate-950 px-5 py-4 md:fixed md:inset-y-0 md:left-0 md:z-20 md:flex md:w-64 md:flex-col md:border-b-0 md:border-r md:px-4 md:py-6"
 		>
-			<a href="/superadmin" class="flex items-center gap-3 px-2">
-				<span class="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-slate-950">
-					<Crown size={20} strokeWidth={2} />
-				</span>
-				<span>
-					<span class="block text-sm font-bold tracking-tight text-white">Quly Executive</span>
-					<span class="block text-xs text-slate-500">Superadmin Cockpit</span>
-				</span>
+			<a href="/superadmin" class="flex flex-col items-start gap-1 px-2">
+				<QulyLogo size={32} tone="white" />
+				<span class="text-xs text-slate-500">Superadmin Cockpit</span>
 			</a>
 
 			<nav

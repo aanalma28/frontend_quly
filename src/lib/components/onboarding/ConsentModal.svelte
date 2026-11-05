@@ -57,7 +57,7 @@
 			</h2>
 
 			<p id="consent-description" class="mt-2 text-sm text-zinc-600">
-				AI Job Hunter works on your behalf. Please review what this means before continuing.
+				Quly works on your behalf. Please review what this means before continuing.
 			</p>
 
 			<ul class="mt-4 space-y-3 text-sm text-zinc-600">

@@ -75,7 +75,7 @@
 </script>
 
 <svelte:head>
-	<title>Integrasi & Koneksi | AI Job Hunter</title>
+	<title>Integrasi & Koneksi | Quly</title>
 	<meta
 		name="description"
 		content="Hubungkan Gmail dan WhatsApp untuk mendukung pengiriman lamaran otomatis."

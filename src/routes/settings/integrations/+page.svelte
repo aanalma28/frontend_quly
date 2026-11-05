@@ -10,7 +10,7 @@
 </script>
 
 <svelte:head>
-	<title>Integrasi | AI Job Hunter</title>
+	<title>Integrasi | Quly</title>
 </svelte:head>
 
 <main class="flex min-h-screen items-center justify-center bg-[#f7f8fc] px-4">

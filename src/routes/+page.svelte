@@ -19,6 +19,7 @@
 		type TopupPackage
 	} from '#lib/services/billingApi.js';
 	import RichText from '#lib/components/superadmin/RichText.svelte';
+	import QulyLogo from '#lib/components/ui/QulyLogo.svelte';
 	import {
 		billingPeriodLabel,
 		formatNumber,
@@ -144,19 +145,18 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <svelte:head>
-	<title>AI Job Hunter — Cari kerja, lebih terarah</title>
+	<title>Quly — Cari kerja, lebih terarah</title>
 	<meta
 		name="description"
-		content="Temukan peluang kerja yang relevan, kelola lamaran, dan persiapkan dirimu bersama AI Job Hunter."
+		content="Temukan peluang kerja yang relevan, kelola lamaran, dan persiapkan dirimu bersama Quly."
 	/>
 </svelte:head>
 
 <div class="landing">
 	<header class="site-header">
 		<nav class="nav-shell" aria-label="Navigasi utama">
-			<a class="brand" href="/" aria-label="AI Job Hunter, beranda">
-				<span class="brand-mark"><Sparkles size={19} strokeWidth={2.2} /></span>
-				<span>job<span class="brand-accent">hunter</span></span>
+			<a class="brand" href="/" aria-label="Quly, beranda">
+				<QulyLogo size={34} />
 			</a>
 
 			<div class="nav-links">
@@ -200,7 +200,7 @@
 					lebih <span class="headline-accent">terarah.</span>
 				</h1>
 				<p class="hero-description">
-					Fokus pada peluang yang tepat. AI Job Hunter membantumu menemukan lowongan, mengelola
+					Fokus pada peluang yang tepat. Quly membantumu menemukan lowongan, mengelola
 					lamaran, dan mempersiapkan diri untuk langkah berikutnya.
 				</p>
 				<div class="hero-actions">
@@ -440,7 +440,7 @@
 				<div class="closing-icon"><Sparkles size={21} /></div>
 				<span class="closing-kicker">Kesempatan berikutnya menantimu</span>
 				<h2>Siap mengambil<br />langkah berikutnya?</h2>
-				<p>Mulai perjalanan kariermu dengan lebih terarah bersama AI Job Hunter.</p>
+				<p>Mulai perjalanan kariermu dengan lebih terarah bersama Quly.</p>
 				<a class="button button-light" href="/auth/register">
 					Buat akun gratis <ArrowRight size={16} />
 				</a>
@@ -449,9 +449,8 @@
 	</main>
 
 	<footer class="site-footer section-shell">
-		<a class="brand footer-brand" href="/" aria-label="AI Job Hunter, beranda">
-			<span class="brand-mark"><Sparkles size={17} strokeWidth={2.2} /></span>
-			<span>job<span class="brand-accent">hunter</span></span>
+		<a class="brand footer-brand" href="/" aria-label="Quly, beranda">
+			<QulyLogo size={30} />
 		</a>
 		<p>Temani langkahmu menuju peluang berikutnya.</p>
 		<div class="footer-links">
@@ -460,7 +459,7 @@
 			<a href="/auth/login">Masuk</a>
 			<a href="/auth/register">Daftar</a>
 		</div>
-		<span class="copyright">© 2026 AI Job Hunter</span>
+		<span class="copyright">© 2026 Quly</span>
 	</footer>
 </div>
 
@@ -606,26 +605,8 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 9px;
-		color: var(--ink);
-		font-size: 19px;
-		font-weight: 760;
-		letter-spacing: -0.8px;
+		color: #2e4fa3;
 		text-decoration: none;
-	}
-
-	.brand-mark {
-		display: grid;
-		width: 34px;
-		height: 34px;
-		place-items: center;
-		border-radius: 11px;
-		background: #6954df;
-		color: white;
-		box-shadow: 0 5px 12px rgb(105 84 223 / 22%);
-	}
-
-	.brand-accent {
-		color: var(--purple);
 	}
 
 	.nav-links,
@@ -2010,13 +1991,6 @@
 
 	.footer-brand {
 		gap: 7px;
-		font-size: 15px;
-	}
-
-	.footer-brand .brand-mark {
-		width: 28px;
-		height: 28px;
-		border-radius: 9px;
 	}
 
 	.site-footer > p {
@@ -2143,15 +2117,6 @@
 
 		.nav-shell {
 			height: 68px;
-		}
-
-		.brand {
-			font-size: 17px;
-		}
-
-		.brand-mark {
-			width: 31px;
-			height: 31px;
 		}
 
 		.nav-links,

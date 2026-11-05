@@ -52,10 +52,10 @@
 </script>
 
 <svelte:head>
-	<title>{page.status} — {errorDetails.title} | AI Job Hunter</title>
+	<title>{page.status} — {errorDetails.title} | Quly</title>
 	<meta
 		name="description"
-		content="Informasi kendala saat membuka halaman AI Job Hunter."
+		content="Informasi kendala saat membuka halaman Quly."
 	/>
 </svelte:head>
 

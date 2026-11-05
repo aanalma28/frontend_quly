@@ -113,7 +113,7 @@
 </script>
 
 <svelte:head>
-	<title>Pengerjaan Psikotes | AI Job Hunter</title>
+	<title>Pengerjaan Psikotes | Quly</title>
 </svelte:head>
 
 {#if isLoading}

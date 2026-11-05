@@ -12,7 +12,7 @@
 </script>
 
 <svelte:head>
-	<title>{title} | AI Job Hunter</title>
+	<title>{title} | Quly</title>
 	<meta name="description" content={description} />
 </svelte:head>
 
@@ -21,7 +21,7 @@
 		<Construction size={26} strokeWidth={1.8} />
 	</div>
 	<p class="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-indigo-600">
-		Bagian dari AI Job Hunter
+		Bagian dari Quly
 	</p>
 	<h1 class="text-3xl font-semibold tracking-tight text-slate-950">{title}</h1>
 	<p class="mt-4 max-w-2xl text-base leading-7 text-slate-600">{description}</p>

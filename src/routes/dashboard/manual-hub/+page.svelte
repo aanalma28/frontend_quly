@@ -541,7 +541,7 @@
 </script>
 
 <svelte:head>
-	<title>Pusat Lowongan | AI Job Hunter</title>
+	<title>Pusat Lowongan | Quly</title>
 	<meta
 		name="description"
 		content="Temukan lowongan kerja, simpan favorit, dan hitung skor kecocokan dengan CV serta hasil psikotesmu."

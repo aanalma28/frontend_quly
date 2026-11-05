@@ -2,7 +2,6 @@
 	import { onMount } from 'svelte';
 	import { initializeAuth, logout } from '#lib/stores/auth.js';
 	import './layout.css';
-	import favicon from '#lib/assets/favicon.svg';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
@@ -16,8 +15,13 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
-	<title>AI Job Hunter</title>
+	<link rel="icon" href="/favicon.ico?v=20261105-2" sizes="any" />
+	<link rel="icon" href="/favicon-32.png?v=20261105-2" type="image/png" sizes="32x32" />
+	<link rel="icon" href="/favicon-48.png?v=20261105-2" type="image/png" sizes="48x48" />
+	<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20261105-2" />
+	<link rel="manifest" href="/site.webmanifest" />
+	<meta name="theme-color" content="#2e4fa3" />
+	<title>Quly — AI Job Hunter</title>
 </svelte:head>
 
 {@render children()}

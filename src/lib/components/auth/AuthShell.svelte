@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import QulyLogo from '#lib/components/ui/QulyLogo.svelte';
 
 	interface Props {
 		title: string;
@@ -14,12 +15,7 @@
 <main class="flex min-h-screen items-center justify-center bg-zinc-50 px-4 py-12">
 	<div class="w-full max-w-md">
 		<div class="mb-8 flex flex-col items-center gap-3 text-center">
-			<div
-				class="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-600 text-lg font-bold text-white"
-				aria-hidden="true"
-			>
-				Q
-			</div>
+			<QulyLogo size={42} />
 			<div>
 				<h1 class="text-2xl font-semibold tracking-tight text-zinc-900">{title}</h1>
 				{#if subtitle}

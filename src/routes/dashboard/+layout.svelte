@@ -21,6 +21,7 @@
 	import { getMyBenefitsApi } from '#lib/services/billingApi.js';
 	import { loadProfile, onboarding, step1Complete } from '#lib/stores/onboardingStore.js';
 	import RequirementsStepsCard from '#lib/components/ui/RequirementsStepsCard.svelte';
+	import QulyLogo from '#lib/components/ui/QulyLogo.svelte';
 	import { goto } from '$app/navigation';
 	import type { LayoutProps } from './$types';
 
@@ -96,7 +97,7 @@
 </script>
 
 <svelte:head>
-	<title>Dashboard | AI Job Hunter</title>
+	<title>Dashboard | Quly</title>
 </svelte:head>
 
 <div class="min-h-screen bg-[#f7f8fc] text-slate-900">
@@ -136,14 +137,9 @@
 	<aside
 		class="border-b border-slate-200 bg-white px-5 py-4 md:fixed md:inset-y-0 md:left-0 md:z-20 md:flex md:w-64 md:flex-col md:border-b-0 md:border-r md:px-4 md:py-6"
 	>
-		<a href="/dashboard" class="flex items-center gap-3 px-2">
-			<span class="flex size-10 items-center justify-center rounded-xl bg-indigo-600 text-white">
-				<BriefcaseBusiness size={21} strokeWidth={1.9} />
-			</span>
-			<span>
-				<span class="block text-sm font-bold tracking-tight text-slate-950">jobhunter</span>
-				<span class="block text-xs text-slate-500">AI career workspace</span>
-			</span>
+		<a href="/dashboard" class="flex flex-col items-start gap-1 px-2">
+			<QulyLogo size={32} />
+			<span class="text-xs text-slate-500">AI career workspace</span>
 		</a>
 
 		<div class="mt-7 flex items-center justify-between md:mt-10">

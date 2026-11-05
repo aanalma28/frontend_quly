@@ -25,7 +25,7 @@
 </script>
 
 <svelte:head>
-	<title>Menghubungkan akun Google | AI Job Hunter</title>
+	<title>Menghubungkan akun Google | Quly</title>
 </svelte:head>
 
 <main class="flex min-h-screen items-center justify-center bg-zinc-50 px-4">

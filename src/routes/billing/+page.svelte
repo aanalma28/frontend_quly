@@ -160,7 +160,7 @@
 </script>
 
 <svelte:head>
-	<title>Paket & Kredit | AI Job Hunter</title>
+	<title>Paket & Kredit | Quly</title>
 	<meta
 		name="description"
 		content="Pilih paket Pejuang Loker atau tambahkan Kredit Kilat untuk melanjutkan lamaran otomatis."

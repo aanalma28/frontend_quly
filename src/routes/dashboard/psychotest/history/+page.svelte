@@ -63,7 +63,7 @@
 </script>
 
 <svelte:head>
-	<title>Riwayat Psikotes | AI Job Hunter</title>
+	<title>Riwayat Psikotes | Quly</title>
 </svelte:head>
 
 <div class="space-y-7">

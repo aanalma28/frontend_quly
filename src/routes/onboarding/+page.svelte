@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { auth, initializeAuth, logoutToOnboardingLogin } from '#lib/stores/auth.js';
+	import QulyLogo from '#lib/components/ui/QulyLogo.svelte';
 
 	let isLoading = $state(true);
 	let showSkipConfirmation = $state(false);
@@ -28,7 +29,10 @@
 
 <main class="min-h-screen bg-[#f7f8fc] px-5 py-8 text-slate-900 sm:px-8">
 	<div class="mx-auto max-w-5xl">
-		<header class="flex justify-end">
+		<header class="flex items-center justify-between gap-4">
+			<a href="/" aria-label="Quly, beranda">
+				<QulyLogo size={32} />
+			</a>
 			<button
 				type="button"
 				onclick={() => (showSkipConfirmation = true)}
