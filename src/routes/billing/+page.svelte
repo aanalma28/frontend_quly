@@ -22,11 +22,11 @@
 	import {
 		getMidtransConfigApi,
 		getMyBenefitsApi,
-		getPaymentApi,
 		getPublicBillingPlansApi,
 		listPaymentsApi,
 		subscribePackageApi,
 		subscribePlanApi,
+		syncPaymentApi,
 		topupCreditApi,
 		type BillingPayment,
 		type MidtransConfigResponse,
@@ -41,11 +41,7 @@
 	import RichText from '#lib/components/superadmin/RichText.svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import { freeLifetimeRemaining } from '#lib/utils/benefitAccess.js';
-	import {
-		clearPendingPaymentId,
-		loadSnapScript,
-		savePendingPaymentId
-	} from '#lib/utils/midtrans.js';
+	import { loadSnapScript, savePendingPaymentId } from '#lib/utils/midtrans.js';
 	import {
 		billingPeriodLabel,
 		formatNumber,
@@ -175,10 +171,6 @@
 		}
 	}
 
-	function isTerminalPayment(status: PaymentStatus): boolean {
-		return ['PAID', 'FAILED', 'EXPIRED', 'CANCELLED', 'REFUNDED'].includes(status);
-	}
-
 	function paymentStatusLabel(status: PaymentStatus): string {
 		switch (status) {
 			case 'PENDING':
@@ -206,67 +198,30 @@
 		return type === 'SUBSCRIPTION' ? 'Paket langganan' : 'Top-up kredit';
 	}
 
-	async function refreshAfterPayment() {
-		await initializeAuth();
-		await Promise.all([loadBenefits(), loadPlans(), loadPayments()]);
-	}
-
-	async function pollPayment(paymentId: string) {
-		for (let attempt = 0; attempt < 15; attempt += 1) {
-			try {
-				const updated = await getPaymentApi(paymentId);
-				if (updated.status === 'PAID') {
-					paymentNotice = 'Pembayaran berhasil dikonfirmasi. Paket/kredit kamu sudah diperbarui.';
-					paymentError = null;
-					clearPendingPaymentId();
-					await refreshAfterPayment();
-					return;
-				}
-				if (isTerminalPayment(updated.status)) {
-					paymentError =
-						updated.status === 'FAILED'
-							? 'Pembayaran gagal. Silakan coba lagi.'
-							: updated.status === 'EXPIRED'
-								? 'Pembayaran kedaluwarsa. Silakan buat transaksi baru.'
-								: updated.status === 'CANCELLED'
-									? 'Pembayaran dibatalkan.'
-									: 'Pembayaran dikembalikan.';
-					clearPendingPaymentId();
-					await loadPayments();
-					return;
-				}
-				paymentNotice = 'Menunggu konfirmasi pembayaran dari Midtrans...';
-			} catch {
-				// The webhook may still be processing; retry briefly.
-			}
-			await new Promise((resolve) => setTimeout(resolve, 2000));
-		}
-		paymentNotice = 'Pembayaran masih diproses. Cek riwayat pembayaran beberapa saat lagi.';
-	}
-
 	async function openPayment(payment: BillingPayment) {
 		savePendingPaymentId(payment.id);
 		selectedPlanId = null;
 		selectedTopUpId = null;
-		setTimeout(() => {
-			void pollPayment(payment.id);
-		}, 1500);
+
+		const goToReturn = (target: 'finish' | 'unfinish' | 'error') => {
+			window.location.assign(
+				`/billing/payment/${target}?paymentId=${encodeURIComponent(payment.id)}`
+			);
+		};
 
 		if (snapReady && window.snap && payment.snapToken) {
 			window.snap.pay(payment.snapToken, {
-				onSuccess: () => void pollPayment(payment.id),
-				onPending: () => {
-					paymentNotice = 'Pembayaran berstatus menunggu. Selesaikan pembayaran di Midtrans.';
-					void loadPayments();
+				onSuccess: async () => {
+					try {
+						await syncPaymentApi(payment.id);
+					} catch {
+						// The return page will retry synchronization.
+					}
+					goToReturn('finish');
 				},
-				onError: () => {
-					paymentError = 'Pembayaran gagal atau dibatalkan di Midtrans.';
-					void loadPayments();
-				},
-				onClose: () => {
-					paymentNotice ??= 'Jendela pembayaran ditutup. Cek status di riwayat pembayaran.';
-					void loadPayments();
-				}
+				onPending: () => goToReturn('unfinish'),
+				onError: () => goToReturn('error'),
+				onClose: () => goToReturn('unfinish')
 			});
 			return;
 		}

@@ -133,6 +133,13 @@ export interface MidtransConfigResponse {
 	clientKey: string | null;
 	snapScriptUrl: string | null;
 	finishUrl: string | null;
+	unfinishUrl?: string | null;
+	errorUrl?: string | null;
+	callbacks?: {
+		finish: string;
+		unfinish: string;
+		error: string;
+	};
 }
 
 export type PaymentStatus =
@@ -219,5 +226,12 @@ export async function listPaymentsApi(page = 1, limit = 20): Promise<PaymentList
 
 export async function getPaymentApi(id: string): Promise<BillingPayment> {
 	const response = await apiRequest(`billing/payments/${id}`);
+	return (await response.json()) as BillingPayment;
+}
+
+export async function syncPaymentApi(id: string): Promise<BillingPayment> {
+	const response = await apiRequest(`billing/payments/${id}/sync`, {
+		method: 'POST'
+	});
 	return (await response.json()) as BillingPayment;
 }
