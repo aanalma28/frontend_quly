@@ -7,7 +7,11 @@ export type JobEmploymentType =
 	| 'CONTRACT'
 	| 'FREELANCE'
 	| 'INTERNSHIP';
-export type JobSourceType = 'TELEGRAM' | 'WEBSITE_HTML' | 'WEBSITE_API';
+export type JobSourceType =
+	| 'TELEGRAM'
+	| 'WEBSITE_HTML'
+	| 'WEBSITE_API'
+	| 'USER_EXTRACTION';
 export type JobSort = 'newest' | 'oldest' | 'salary_desc' | 'salary_asc';
 
 export interface JobRequirements {
@@ -40,9 +44,14 @@ export interface JobListItem {
 	isSalaryConfidential: boolean;
 	requirements: JobRequirements | null;
 	jobDescriptionSummary: string | null;
+	subjectFormat?: string | null;
 	applicationType: string;
 	applicationDestination: string;
 	sourceType: JobSourceType | string;
+	createdById?: string | null;
+	isUserExtracted?: boolean;
+	isOwner?: boolean;
+	canEdit?: boolean;
 	sourceDetail: string | null;
 	sourceUrl: string | null;
 	localImagePath: string | null;
@@ -121,6 +130,25 @@ export interface BookmarkResult {
 	savedAt?: string;
 }
 
+export interface UpdateExtractedJobInput {
+	jobTitle?: string;
+	companyName?: string;
+	location?: string;
+	workplaceType?: JobWorkplaceType;
+	employmentType?: JobEmploymentType;
+	salaryMin?: number | null;
+	salaryMax?: number | null;
+	salaryCurrency?: string | null;
+	isSalaryConfidential?: boolean;
+	requirements?: JobRequirements;
+	jobDescriptionSummary?: string;
+	subjectFormat?: string | null;
+	applicationType?: 'EMAIL' | 'WEBSITE_PORTAL' | 'WHATSAPP' | 'TELEGRAM';
+	applicationDestination?: string;
+	applicationInstructions?: string | null;
+	expiresAt?: string | null;
+}
+
 function toQuery(query: ListJobsQuery): string {
 	const params = new URLSearchParams();
 	const values: Array<[string, string | number | boolean | undefined | null]> = [
@@ -156,6 +184,25 @@ export async function listJobsApi(query: ListJobsQuery = {}): Promise<JobListRes
 export async function getJobApi(id: string): Promise<JobDetail> {
 	const response = await apiRequest(`jobs/${id}`);
 	return (await response.json()) as JobDetail;
+}
+
+export async function updateExtractedJobApi(
+	id: string,
+	input: UpdateExtractedJobInput
+): Promise<JobListItem> {
+	const response = await apiRequest(`jobs/${id}`, {
+		method: 'PATCH',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(input)
+	});
+	return (await response.json()) as JobListItem;
+}
+
+export async function deleteExtractedJobApi(
+	id: string
+): Promise<{ success: boolean; id: string }> {
+	const response = await apiRequest(`jobs/${id}`, { method: 'DELETE' });
+	return (await response.json()) as { success: boolean; id: string };
 }
 
 export async function bookmarkJobApi(id: string): Promise<BookmarkResult> {

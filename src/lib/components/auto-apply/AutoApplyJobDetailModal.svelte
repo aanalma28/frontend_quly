@@ -152,7 +152,7 @@
 				<div class="min-w-0">
 					<div class="flex flex-wrap items-center gap-1.5">
 						<span class="rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-700">
-							{isManual ? 'Loker tambahan' : 'Bookmark'}
+							{option.isUserExtracted ? 'Ekstraksi user' : isManual ? 'Loker tambahan' : 'Bookmark'}
 						</span>
 						{#if jobDetail}
 							<span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600">

@@ -9,14 +9,17 @@
 		ChevronRight,
 		Coins,
 		MapPin,
+		Pencil,
 		RefreshCw,
 		Search,
 		SlidersHorizontal,
 		Sparkles,
+		Trash2,
 		WalletCards,
 		X
 	} from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
+	import ExtractedJobEditModal from '#lib/components/jobs/ExtractedJobEditModal.svelte';
 	import JobDetailDrawer from '#lib/components/jobs/JobDetailDrawer.svelte';
 	import QuotaTopupModal from '#lib/components/jobs/QuotaTopupModal.svelte';
 	import {
@@ -33,10 +36,12 @@
 	} from '#lib/services/billingApi.js';
 	import {
 		bookmarkJobApi,
+		deleteExtractedJobApi,
 		getJobApi,
 		listJobsApi,
 		scoreJobApi,
 		unbookmarkJobApi,
+		updateExtractedJobApi,
 		type JobDetail,
 		type JobEmploymentType,
 		type JobListItem,
@@ -45,7 +50,8 @@
 		type JobScoreUsage,
 		type JobSort,
 		type JobSourceType,
-		type JobWorkplaceType
+		type JobWorkplaceType,
+		type UpdateExtractedJobInput
 	} from '#lib/services/jobApi.js';
 	import { ApiError } from '#lib/utils/api.js';
 	import { benefitAccessMode, freeLifetimeRemaining } from '#lib/utils/benefitAccess.js';
@@ -70,7 +76,8 @@
 		{ value: '', label: 'Semua sumber' },
 		{ value: 'TELEGRAM', label: 'Telegram' },
 		{ value: 'WEBSITE_HTML', label: 'Website HTML' },
-		{ value: 'WEBSITE_API', label: 'Website API' }
+		{ value: 'WEBSITE_API', label: 'Website API' },
+		{ value: 'USER_EXTRACTION', label: 'Ekstraksi User' }
 	];
 	const sortOptions: Array<{ value: JobSort; label: string }> = [
 		{ value: 'newest', label: 'Terbaru' },
@@ -113,6 +120,12 @@
 	let loadingDetail = $state(false);
 	let detailError = $state<string | null>(null);
 	let bookmarkingId = $state<string | null>(null);
+
+	let editJob = $state<JobListItem | null>(null);
+	let editOpen = $state(false);
+	let editSaving = $state(false);
+	let editError = $state<string | null>(null);
+	let deletingId = $state<string | null>(null);
 
 	let myBenefits = $state<MyBenefitsResponse | null>(null);
 	let topupPackages = $state<TopupPackage[]>([]);
@@ -365,6 +378,59 @@
 			actionError = errorText(error, 'Lowongan belum dapat disimpan.');
 		} finally {
 			bookmarkingId = null;
+		}
+	}
+
+	function openEdit(job: JobListItem) {
+		if (!job.canEdit) return;
+		editJob = job;
+		editOpen = true;
+		editError = null;
+	}
+
+	function closeEdit() {
+		if (editSaving) return;
+		editOpen = false;
+		editJob = null;
+		editError = null;
+	}
+
+	async function saveEditedJob(input: UpdateExtractedJobInput) {
+		if (!editJob || editSaving) return;
+		editSaving = true;
+		editError = null;
+		try {
+			const updated = await updateExtractedJobApi(editJob.id, input);
+			const refreshed = await getJobApi(updated.id);
+			const update = (item: JobListItem): JobListItem =>
+				item.id === refreshed.id ? { ...item, ...refreshed } : item;
+			jobs = jobs.map(update);
+			if (selectedJob?.id === refreshed.id) selectedJob = refreshed;
+			if (selectedDetail?.id === refreshed.id) selectedDetail = refreshed;
+			editOpen = false;
+			editJob = null;
+		} catch (error) {
+			editError = errorText(error, 'Perubahan loker belum dapat disimpan.');
+		} finally {
+			editSaving = false;
+		}
+	}
+
+	async function deleteExtractedJob(job: JobListItem) {
+		if (!job.canEdit || deletingId) return;
+		if (!window.confirm(`Hapus loker "${job.jobTitle}"? Tindakan ini tidak dapat dibatalkan.`)) {
+			return;
+		}
+		deletingId = job.id;
+		actionError = null;
+		try {
+			await deleteExtractedJobApi(job.id);
+			jobs = jobs.filter((item) => item.id !== job.id);
+			if (selectedJob?.id === job.id) closeJob();
+		} catch (error) {
+			actionError = errorText(error, 'Loker belum dapat dihapus.');
+		} finally {
+			deletingId = null;
 		}
 	}
 
@@ -826,6 +892,9 @@
 							<span class="rounded-full bg-slate-100 px-2 py-1 text-slate-600">
 								{employmentTypeLabel[job.employmentType as keyof typeof employmentTypeLabel] ?? job.employmentType}
 							</span>
+							{#if job.isUserExtracted}
+								<span class="rounded-full bg-amber-50 px-2 py-1 text-amber-700">Ekstraksi user</span>
+							{/if}
 							{#if job.matchScore}
 								<span class="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">Skor {job.matchScore.score}</span>
 							{/if}
@@ -877,6 +946,31 @@
 							<Bookmark size={15} />
 						{/if}
 					</button>
+
+					{#if job.canEdit}
+						<div class="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+							<button
+								type="button"
+								onclick={() => openEdit(job)}
+								class="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50"
+							>
+								<Pencil size={12} /> Edit loker
+							</button>
+							<button
+								type="button"
+								onclick={() => void deleteExtractedJob(job)}
+								disabled={deletingId === job.id}
+								class="inline-flex h-8 items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 text-[10px] font-semibold text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+							>
+								{#if deletingId === job.id}
+									<Spinner size={12} label="Menghapus loker" />
+								{:else}
+									<Trash2 size={12} />
+								{/if}
+								Hapus
+							</button>
+						</div>
+					{/if}
 				</article>
 			{/each}
 		</div>
@@ -920,6 +1014,22 @@
 	}}
 	onscore={() => void requestScore()}
 	ontopup={openTopupForScoring}
+	onedit={() => {
+		if (selectedJob) openEdit(selectedJob);
+	}}
+	ondelete={() => {
+		if (selectedJob) void deleteExtractedJob(selectedJob);
+	}}
+	deleting={selectedJob !== null && deletingId === selectedJob.id}
+/>
+
+<ExtractedJobEditModal
+	open={editOpen}
+	job={editJob}
+	saving={editSaving}
+	error={editError}
+	onclose={closeEdit}
+	onsave={(input) => void saveEditedJob(input)}
 />
 
 <QuotaTopupModal

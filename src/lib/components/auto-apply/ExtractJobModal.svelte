@@ -13,6 +13,7 @@
 	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import { extractExternalJobApi, type ExtractedJob } from '#lib/services/autoApplyApi.js';
 	import type { AutoApplyJobOption } from '#lib/services/autoApplyApi.js';
+	import { updateExtractedJobApi } from '#lib/services/jobApi.js';
 	import type { UserBenefitQuota } from '#lib/services/billingApi.js';
 	import { ApiError } from '#lib/utils/api.js';
 	import { benefitAccessMode, freeLifetimeRemaining } from '#lib/utils/benefitAccess.js';
@@ -143,13 +144,23 @@
 				return;
 			}
 			result = {
-				jobId: response.job?.jobId ?? undefined,
+				id: response.job?.id ?? response.jobId ?? undefined,
+				jobId: response.jobId ?? response.job?.id ?? undefined,
 				companyName: response.job?.companyName ?? '',
 				jobTitle: response.job?.jobTitle ?? '',
 				recipientEmail: response.job?.recipientEmail ?? '',
 				description: response.job?.description ?? '',
 				subjectFormat: response.job?.subjectFormat ?? null,
-				applicationInstructions: response.job?.applicationInstructions ?? null
+				applicationInstructions: response.job?.applicationInstructions ?? null,
+				location: response.job?.location ?? null,
+				workplaceType: response.job?.workplaceType ?? null,
+				employmentType: response.job?.employmentType ?? null,
+				applicationType: response.job?.applicationType ?? null,
+				applicationDestination: response.job?.applicationDestination ?? null,
+				sourceType: response.job?.sourceType ?? null,
+				createdById: response.job?.createdById ?? null,
+				isOwner: response.job?.isOwner,
+				canEdit: response.job?.canEdit
 			};
 			usageMessage = response.charged
 				? `Ekstraksi selesai. ${response.usage.creditsCharged > 0 ? `${response.usage.creditsCharged} kredit terpakai.` : 'Menggunakan kuota paket.'}`
@@ -165,7 +176,7 @@
 		}
 	}
 
-	function addJob() {
+	async function addJob() {
 		if (!result) return;
 		formError = null;
 		const jobTitle = result.jobTitle?.trim() ?? '';
@@ -179,16 +190,77 @@
 			formError = 'Format email HRD tidak valid.';
 			return;
 		}
+
+		const jobId = result.jobId ?? result.id ?? undefined;
+		if (jobId) {
+			const workplaceType =
+				result.workplaceType === 'REMOTE' ||
+				result.workplaceType === 'WFO' ||
+				result.workplaceType === 'HYBRID'
+					? result.workplaceType
+					: undefined;
+			const employmentType =
+				result.employmentType === 'FULL_TIME' ||
+				result.employmentType === 'PART_TIME' ||
+				result.employmentType === 'CONTRACT' ||
+				result.employmentType === 'FREELANCE' ||
+				result.employmentType === 'INTERNSHIP'
+					? result.employmentType
+					: undefined;
+			const applicationType =
+				result.applicationType === 'EMAIL' ||
+				result.applicationType === 'WEBSITE_PORTAL' ||
+				result.applicationType === 'WHATSAPP' ||
+				result.applicationType === 'TELEGRAM'
+					? result.applicationType
+					: recipientEmail
+						? 'EMAIL'
+						: undefined;
+
+			try {
+				await updateExtractedJobApi(jobId, {
+					jobTitle,
+					companyName,
+					...(result.location ? { location: result.location } : {}),
+					...(workplaceType ? { workplaceType } : {}),
+					...(employmentType ? { employmentType } : {}),
+					...(result.description
+						? { jobDescriptionSummary: result.description.trim() }
+						: {}),
+					subjectFormat: result.subjectFormat?.trim() || null,
+					...(applicationType ? { applicationType } : {}),
+					...(result.applicationDestination || recipientEmail
+						? { applicationDestination: result.applicationDestination ?? recipientEmail }
+						: {}),
+					applicationInstructions: result.applicationInstructions?.trim() || null
+				});
+			} catch (error) {
+				formError =
+					error instanceof Error
+						? error.message
+						: 'Perubahan data loker belum dapat disimpan.';
+				return;
+			}
+		}
+
 		onadded({
 			key: `manual:${crypto.randomUUID()}`,
 			source: 'manual',
-			jobId: result.jobId ?? undefined,
+			jobId,
 			jobTitle,
 			companyName,
 			recipientEmail,
 			description: result.description?.trim() || undefined,
 			subjectFormat: result.subjectFormat?.trim() || undefined,
 			applicationInstructions: result.applicationInstructions?.trim() || undefined,
+			location: result.location ?? undefined,
+			workplaceType: result.workplaceType ?? undefined,
+			employmentType: result.employmentType ?? undefined,
+			applicationType: result.applicationType ?? (recipientEmail ? 'EMAIL' : undefined),
+			applicationDestination: result.applicationDestination ?? recipientEmail,
+			isUserExtracted: true,
+			isOwner: result.isOwner ?? true,
+			canEdit: result.canEdit ?? true,
 			needsEmail: !recipientEmail,
 			selected: true
 		});
@@ -369,7 +441,7 @@
 						<button type="button" onclick={requestReanalyse} class="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 px-4 text-xs font-semibold text-slate-600 hover:bg-slate-50">
 							Analisis ulang
 						</button>
-						<button type="button" onclick={addJob} class="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-4 text-xs font-semibold text-white hover:bg-indigo-700">
+						<button type="button" onclick={() => void addJob()} class="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-4 text-xs font-semibold text-white hover:bg-indigo-700">
 							<Plus size={15} /> Tambahkan ke daftar
 						</button>
 					</div>

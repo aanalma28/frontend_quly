@@ -34,7 +34,8 @@
 		'ALL',
 		'TELEGRAM',
 		'WEBSITE_HTML',
-		'WEBSITE_API'
+		'WEBSITE_API',
+		'USER_EXTRACTION'
 	];
 
 	const initialStatus = appPage.url.searchParams.get('status');
@@ -268,6 +269,11 @@
 									<p class="mt-1 text-[11px] text-slate-500">
 										{job.source?.name ?? job.sourceDetail}
 									</p>
+									{#if job.createdBy}
+										<p class="mt-0.5 text-[10px] text-amber-300/80">
+											User: {job.createdBy.email}
+										</p>
+									{/if}
 								</td>
 								<td class="px-5 py-4 text-xs text-slate-300">{applicationTypeLabel[job.applicationType]}</td>
 								<td class="px-5 py-4">

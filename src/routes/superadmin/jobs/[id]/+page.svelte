@@ -8,6 +8,7 @@
 		Image as ImageIcon,
 		Save,
 		Send,
+		Trash2,
 		X
 	} from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
@@ -25,6 +26,7 @@
 		workplaceTypeLabel
 	} from '#lib/components/superadmin/status.js';
 	import {
+		deleteJobApi,
 		getJobApi,
 		listJobsApi,
 		reviewJobApi,
@@ -65,6 +67,7 @@
 	let formEducation = $state('');
 	let formSkills = $state('');
 	let formDescription = $state('');
+	let formSubjectFormat = $state('');
 	let formApplicationType = $state<ApplicationType>('EMAIL');
 	let formApplicationDestination = $state('');
 	let formApplicationInstructions = $state('');
@@ -118,6 +121,7 @@
 		formEducation = data.requirements?.education ?? '';
 		formSkills = (data.requirements?.skills ?? []).join(', ');
 		formDescription = data.jobDescriptionSummary ?? '';
+		formSubjectFormat = data.subjectFormat ?? '';
 		formApplicationType = data.applicationType;
 		formApplicationDestination = data.applicationDestination;
 		formApplicationInstructions = data.applicationInstructions ?? '';
@@ -185,6 +189,7 @@
 			isSalaryConfidential: formSalaryConfidential,
 			requirements,
 			jobDescriptionSummary: textValue(formDescription).trim(),
+			subjectFormat: textValue(formSubjectFormat).trim() || null,
 			applicationType: formApplicationType,
 			applicationDestination: textValue(formApplicationDestination).trim(),
 			applicationInstructions: textValue(formApplicationInstructions).trim() || null,
@@ -230,6 +235,9 @@
 			successMessage = markSaved
 				? 'Perubahan disimpan dan lowongan ditandai sebagai SAVED.'
 				: 'Perubahan data lowongan berhasil disimpan.';
+			if (markSaved) {
+				await navigateAfterAction();
+			}
 			return true;
 		} catch (error) {
 			errorMessage = error instanceof Error ? error.message : 'Perubahan gagal disimpan.';
@@ -306,7 +314,7 @@
 
 	async function navigateAfterAction() {
 		try {
-			const nextId = await findFirstPendingJobId();
+			const nextId = await findNextJobId();
 			await goto(nextId ? `/superadmin/jobs/${nextId}` : '/superadmin/jobs');
 		} catch {
 			await goto('/superadmin/jobs');
@@ -326,11 +334,11 @@
 		errorMessage = null;
 		successMessage = null;
 		try {
-			// One atomic call: apply edits and publish.
-			const updated = await reviewJobApi(jobId, { status: 'PUBLISHED', data: payload });
+			// One atomic call: apply edits and approve the job.
+			const updated = await reviewJobApi(jobId, { status: 'APPROVED', data: payload });
 			job = job ? { ...job, ...updated } : updated;
 		} catch (error) {
-			errorMessage = error instanceof Error ? error.message : 'Publikasi gagal.';
+			errorMessage = error instanceof Error ? error.message : 'Approval gagal.';
 			isPublishing = false;
 			return;
 		}
@@ -341,16 +349,49 @@
 		}
 	}
 
-	async function discard() {
+	async function rejectJob() {
 		if (isDiscarding) return;
-		if (typeof window !== 'undefined' && !window.confirm('Tolak dan buang lowongan ini?')) return;
+		if (
+			typeof window !== 'undefined' &&
+			!window.confirm('Tolak lowongan ini? Data tetap tersimpan dengan status REJECTED.')
+		) {
+			return;
+		}
 		isDiscarding = true;
 		errorMessage = null;
 		successMessage = null;
 		try {
-			await reviewJobApi(jobId, { status: 'REJECTED' });
+			const updated = await reviewJobApi(jobId, { status: 'REJECTED' });
+			job = job ? { ...job, ...updated } : updated;
 		} catch (error) {
-			errorMessage = error instanceof Error ? error.message : 'Gagal membuang lowongan.';
+			errorMessage = error instanceof Error ? error.message : 'Gagal menolak lowongan.';
+			isDiscarding = false;
+			return;
+		}
+		try {
+			await navigateAfterAction();
+		} finally {
+			isDiscarding = false;
+		}
+	}
+
+	async function discardJob() {
+		if (isDiscarding) return;
+		if (
+			typeof window !== 'undefined' &&
+			!window.confirm(
+				'Hapus permanen lowongan ini beserta poster dan data terkait? Tindakan ini tidak dapat dibatalkan.'
+			)
+		) {
+			return;
+		}
+		isDiscarding = true;
+		errorMessage = null;
+		successMessage = null;
+		try {
+			await deleteJobApi(jobId);
+		} catch (error) {
+			errorMessage = error instanceof Error ? error.message : 'Gagal menghapus lowongan.';
 			isDiscarding = false;
 			return;
 		}
@@ -406,6 +447,9 @@
 						{jobStatusLabel[job.status]}
 					</span>
 					<span>{sourceTypeLabel[job.sourceType]} · {job.source?.name ?? job.sourceDetail}</span>
+					{#if job.createdBy}
+						<span>· User: {job.createdBy.email}</span>
+					{/if}
 					<span>· Confidence {job.confidenceScore !== null ? `${Math.round(job.confidenceScore * 100)}%` : '—'}</span>
 					<span>· Scraped {formatDate(job.scrapedAt)}</span>
 				</div>
@@ -626,6 +670,11 @@
 					</div>
 
 					<label class="block space-y-1.5 text-sm font-medium text-slate-300">
+						Format Subjek Email
+						<input bind:value={formSubjectFormat} maxlength="500" class={inputClass} />
+					</label>
+
+					<label class="block space-y-1.5 text-sm font-medium text-slate-300">
 						Instruksi Lamaran
 						<textarea bind:value={formApplicationInstructions} rows="2" maxlength="5000" class={inputClass}></textarea>
 					</label>
@@ -657,17 +706,26 @@
 						disabled={isSaving || isPublishing || isDiscarding || isFindingNext}
 						class="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:opacity-60"
 					>
-						{#if isPublishing}<Spinner label="Mempublikasikan" />{:else}<Send size={15} />{/if}
-						Approve &amp; Publish
+						{#if isPublishing}<Spinner label="Menyetujui" />{:else}<Send size={15} />{/if}
+						Approve
 					</button>
 					<button
 						type="button"
-						onclick={() => void discard()}
+						onclick={() => void rejectJob()}
+						disabled={isSaving || isPublishing || isDiscarding || isFindingNext}
+						class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-amber-500/30 px-4 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/10 disabled:opacity-60"
+					>
+						{#if isDiscarding}<Spinner label="Menolak" />{:else}<Ban size={15} />{/if}
+						Reject
+					</button>
+					<button
+						type="button"
+						onclick={() => void discardJob()}
 						disabled={isSaving || isPublishing || isDiscarding || isFindingNext}
 						class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-rose-500/30 px-4 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/10 disabled:opacity-60"
 					>
-						{#if isDiscarding}<Spinner label="Membuang" />{:else}<Ban size={15} />{/if}
-						Reject / Discard
+						{#if isDiscarding}<Spinner label="Menghapus" />{:else}<Trash2 size={15} />{/if}
+						Discard
 					</button>
 					<button
 						type="button"

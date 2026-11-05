@@ -27,7 +27,11 @@ export type JobStatus =
 	| 'PUBLISHED'
 	| 'ARCHIVED'
 	| 'REJECTED';
-export type IngestionSourceType = 'TELEGRAM' | 'WEBSITE_HTML' | 'WEBSITE_API';
+export type IngestionSourceType =
+	| 'TELEGRAM'
+	| 'WEBSITE_HTML'
+	| 'WEBSITE_API'
+	| 'USER_EXTRACTION';
 export type IngestionSourceKind = IngestionSourceType;
 export type IngestionPaginationType =
 	| 'LOKER_SEMAR'
@@ -519,6 +523,7 @@ export interface ScrapedJob {
 	salaryCurrency: string | null;
 	isSalaryConfidential: boolean;
 	requirements: JobRequirements | null;
+	subjectFormat?: string | null;
 	applicationType: ApplicationType;
 	applicationDestination: string;
 	sourceType: IngestionSourceType;
@@ -529,6 +534,12 @@ export interface ScrapedJob {
 		name: string;
 		url: string;
 		type: IngestionSourceType;
+	} | null;
+	createdById?: string | null;
+	createdBy?: {
+		id: string;
+		email: string;
+		role: string;
 	} | null;
 	localImagePath?: string | null;
 	status: JobStatus;
@@ -578,6 +589,7 @@ export interface UpdateScrapedJobInput {
 	isSalaryConfidential?: boolean;
 	requirements?: JobRequirements;
 	jobDescriptionSummary?: string;
+	subjectFormat?: string | null;
 	applicationType?: ApplicationType;
 	applicationDestination?: string;
 	applicationInstructions?: string | null;
@@ -1188,10 +1200,18 @@ export async function reviewJobApi(
 	return (await response.json()) as ScrapedJob;
 }
 
+export async function deleteJobApi(
+	id: string
+): Promise<{ success: boolean; id: string }> {
+	const response = await apiRequest(`superadmin/jobs/${id}`, { method: 'DELETE' });
+	return (await response.json()) as { success: boolean; id: string };
+}
+
 function normalizeIngestionSourceType(value: unknown): IngestionSourceKind {
 	if (value === 'TELEGRAM' || value === 'TELEGRAM_CHANNEL') return 'TELEGRAM';
 	if (value === 'WEBSITE_HTML' || value === 'CORPORATE_WEBSITE') return 'WEBSITE_HTML';
 	if (value === 'WEBSITE_API') return 'WEBSITE_API';
+	if (value === 'USER_EXTRACTION') return 'USER_EXTRACTION';
 	return 'TELEGRAM';
 }
 

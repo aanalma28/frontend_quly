@@ -124,13 +124,15 @@ export const jobStatusTone: Record<JobStatus, string> = {
 export const sourceTypeLabel: Record<IngestionSourceType, string> = {
 	TELEGRAM: 'Telegram',
 	WEBSITE_HTML: 'Website HTML',
-	WEBSITE_API: 'Website API'
+	WEBSITE_API: 'Website API',
+	USER_EXTRACTION: 'Ekstraksi User'
 };
 
 export const sourceTypeTone: Record<IngestionSourceType, string> = {
 	TELEGRAM: 'bg-sky-500/10 text-sky-300 ring-sky-500/20',
 	WEBSITE_HTML: 'bg-violet-500/10 text-violet-300 ring-violet-500/20',
-	WEBSITE_API: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20'
+	WEBSITE_API: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20',
+	USER_EXTRACTION: 'bg-amber-500/10 text-amber-300 ring-amber-500/20'
 };
 
 export const applicationTypeLabel: Record<ApplicationType, string> = {

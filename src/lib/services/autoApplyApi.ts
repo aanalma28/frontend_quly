@@ -42,6 +42,7 @@ export interface ExtractionUsage {
 }
 
 export interface ExtractedJob {
+	id?: string | null;
 	jobId?: string | null;
 	companyName: string | null;
 	jobTitle: string | null;
@@ -49,12 +50,22 @@ export interface ExtractedJob {
 	description: string | null;
 	subjectFormat?: string | null;
 	applicationInstructions?: string | null;
+	location?: string | null;
+	workplaceType?: string | null;
+	employmentType?: string | null;
+	applicationType?: string | null;
+	applicationDestination?: string | null;
+	sourceType?: string | null;
+	createdById?: string | null;
+	isOwner?: boolean;
+	canEdit?: boolean;
 }
 
 export interface ExternalJobExtractionResult {
 	valid: boolean;
 	reason: string | null;
 	charged: boolean;
+	jobId?: string | null;
 	job?: ExtractedJob | null;
 	usage: ExtractionUsage;
 }
@@ -221,6 +232,11 @@ export interface AutoApplyJobOption {
 	location?: string;
 	workplaceType?: string;
 	employmentType?: string;
+	applicationType?: string;
+	applicationDestination?: string;
+	isUserExtracted?: boolean;
+	isOwner?: boolean;
+	canEdit?: boolean;
 	matchScore?: number | null;
 	needsEmail: boolean;
 	selected: boolean;
@@ -243,6 +259,11 @@ export function bookmarkToAutoApplyOption(job: JobListItem): AutoApplyJobOption 
 		location: job.location,
 		workplaceType: job.workplaceType,
 		employmentType: job.employmentType,
+		applicationType: job.applicationType,
+		applicationDestination: job.applicationDestination,
+		isUserExtracted: job.isUserExtracted,
+		isOwner: job.isOwner,
+		canEdit: job.canEdit,
 		matchScore: job.matchScore?.score ?? null,
 		needsEmail: !recipientEmail,
 		selected: false

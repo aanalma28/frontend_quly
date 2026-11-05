@@ -14,7 +14,9 @@
 		Image as ImageIcon,
 		Lightbulb,
 		MapPin,
+		Pencil,
 		Sparkles,
+		Trash2,
 		X
 	} from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
@@ -36,6 +38,9 @@
 		onbookmark: () => void;
 		onscore: () => void;
 		ontopup: () => void;
+		onedit?: () => void;
+		ondelete?: () => void;
+		deleting?: boolean;
 	}
 
 	let {
@@ -50,7 +55,10 @@
 		onclose,
 		onbookmark,
 		onscore,
-		ontopup
+		ontopup,
+		onedit,
+		ondelete,
+		deleting = false
 	}: Props = $props();
 
 	const display = $derived(detail ?? job);
@@ -160,6 +168,11 @@
 						<span class="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600">
 							{employmentTypeLabel[display.employmentType as keyof typeof employmentTypeLabel] ?? display.employmentType}
 						</span>
+						{#if display.isUserExtracted}
+							<span class="rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700 ring-1 ring-inset ring-amber-200">
+								Ekstraksi user
+							</span>
+						{/if}
 						{#if matchScore}
 							<span class="rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ring-inset {scoreTone(matchScore.score)}">
 								Skor {matchScore.score}
@@ -174,6 +187,27 @@
 					</p>
 				</div>
 				<div class="flex shrink-0 gap-1.5">
+					{#if display.canEdit && onedit}
+						<button
+							type="button"
+							onclick={onedit}
+							class="inline-flex size-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-indigo-700"
+							aria-label="Edit loker"
+						>
+							<Pencil size={16} />
+						</button>
+					{/if}
+					{#if display.canEdit && ondelete}
+						<button
+							type="button"
+							onclick={ondelete}
+							disabled={deleting}
+							class="inline-flex size-9 items-center justify-center rounded-lg border border-rose-200 bg-white text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+							aria-label="Hapus loker"
+						>
+							{#if deleting}<Spinner label="Menghapus" />{:else}<Trash2 size={16} />{/if}
+						</button>
+					{/if}
 					<button
 						type="button"
 						onclick={onbookmark}
@@ -278,6 +312,13 @@
 								{/each}
 							</div>
 						{/if}
+					</section>
+				{/if}
+
+				{#if display.subjectFormat}
+					<section class="mt-5 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4">
+						<h3 class="text-xs font-bold uppercase tracking-wide text-indigo-800">Format subjek email</h3>
+						<p class="mt-1.5 whitespace-pre-wrap text-xs leading-5 text-indigo-950/80">{display.subjectFormat}</p>
 					</section>
 				{/if}
 

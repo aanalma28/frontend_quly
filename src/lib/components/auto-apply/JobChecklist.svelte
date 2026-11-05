@@ -54,6 +54,7 @@
 	);
 
 	function optionLabel(option: AutoApplyJobOption): string {
+		if (option.isUserExtracted) return 'Ekstraksi user';
 		return option.source === 'bookmark' ? 'Bookmark' : 'Loker tambahan';
 	}
 
