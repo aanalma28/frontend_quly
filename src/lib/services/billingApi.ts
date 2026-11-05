@@ -126,3 +126,98 @@ export async function subscribePlanApi(plan: PlanId): Promise<unknown> {
 	});
 	return response.json();
 }
+
+export interface MidtransConfigResponse {
+	configured: boolean;
+	isProduction: boolean;
+	clientKey: string | null;
+	snapScriptUrl: string | null;
+	finishUrl: string | null;
+}
+
+export type PaymentStatus =
+	| 'PENDING'
+	| 'PAID'
+	| 'FAILED'
+	| 'EXPIRED'
+	| 'CANCELLED'
+	| 'REFUNDED';
+
+export type PaymentType = 'SUBSCRIPTION' | 'CREDIT_TOPUP';
+
+export interface BillingPaymentPackage {
+	id: string;
+	name: string;
+	tier: string;
+}
+
+export interface BillingPaymentTopupPackage {
+	id: string;
+	name: string;
+	credits: number;
+}
+
+export interface BillingPayment {
+	id: string;
+	orderId: string;
+	type: PaymentType;
+	status: PaymentStatus;
+	amountIdr: number;
+	packageId: string | null;
+	topupPackageId: string | null;
+	credits: number | null;
+	package: BillingPaymentPackage | null;
+	topupPackage: BillingPaymentTopupPackage | null;
+	snapToken: string | null;
+	redirectUrl: string | null;
+	paidAt: string | null;
+	expiresAt: string | null;
+	createdAt: string;
+	updatedAt: string;
+}
+
+export interface PaymentListResponse {
+	items: BillingPayment[];
+	meta: {
+		page: number;
+		limit: number;
+		total: number;
+		totalPages: number;
+	};
+}
+
+export async function getMidtransConfigApi(): Promise<MidtransConfigResponse> {
+	const response = await fetch(getApiUrl('billing/midtrans/config'));
+	if (!response.ok) {
+		throw new ApiError(`Konfigurasi pembayaran gagal dimuat (${response.status}).`, response.status);
+	}
+	return (await response.json()) as MidtransConfigResponse;
+}
+
+export async function subscribePackageApi(packageId: string): Promise<BillingPayment> {
+	const response = await apiRequest('billing/subscribe', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ packageId })
+	});
+	return (await response.json()) as BillingPayment;
+}
+
+export async function topupCreditApi(packageId: string): Promise<BillingPayment> {
+	const response = await apiRequest('billing/topup-credit', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ packageId })
+	});
+	return (await response.json()) as BillingPayment;
+}
+
+export async function listPaymentsApi(page = 1, limit = 20): Promise<PaymentListResponse> {
+	const response = await apiRequest(`billing/payments?page=${page}&limit=${limit}`);
+	return (await response.json()) as PaymentListResponse;
+}
+
+export async function getPaymentApi(id: string): Promise<BillingPayment> {
+	const response = await apiRequest(`billing/payments/${id}`);
+	return (await response.json()) as BillingPayment;
+}
