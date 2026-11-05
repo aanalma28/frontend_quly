@@ -65,24 +65,58 @@ export interface ExternalJobExtractionResult {
 	valid: boolean;
 	reason: string | null;
 	charged: boolean;
+	deduplicated?: boolean;
 	jobId?: string | null;
 	job?: ExtractedJob | null;
-	usage: ExtractionUsage;
+	usage: ExtractionUsage | null;
 }
 
-export async function extractExternalJobApi(input: {
+export interface ExternalJobExtractionBatchResponse {
+	items: ExternalJobExtractionResult[];
+}
+
+/** Extract one text or up to ten poster images in a single backend request. */
+export async function extractExternalJobsApi(input: {
 	text?: string;
-	image?: File | null;
-}): Promise<ExternalJobExtractionResult> {
+	images?: File[];
+}): Promise<ExternalJobExtractionBatchResponse> {
 	const formData = new FormData();
 	if (input.text?.trim()) formData.append('text', input.text.trim());
-	if (input.image) formData.append('image', input.image, input.image.name);
+	for (const image of input.images ?? []) {
+		formData.append('images', image, image.name);
+	}
 
 	const response = await apiRequest('auto-apply/extract-job', {
 		method: 'POST',
 		body: formData
 	});
-	return (await response.json()) as ExternalJobExtractionResult;
+	const body = (await response.json()) as
+		| ExternalJobExtractionBatchResponse
+		| ExternalJobExtractionResult;
+
+	// Compatibility with an older backend which returned one item directly.
+	return 'items' in body ? body : { items: [body] };
+}
+
+/** Legacy single-image helper kept for callers outside the bulk modal. */
+export async function extractExternalJobApi(input: {
+	text?: string;
+	image?: File | null;
+}): Promise<ExternalJobExtractionResult> {
+	const response = await extractExternalJobsApi({
+		text: input.text,
+		images: input.image ? [input.image] : []
+	});
+	return (
+		response.items[0] ?? {
+			valid: false,
+			reason: 'Tidak ada hasil ekstraksi.',
+			charged: false,
+			jobId: null,
+			job: null,
+			usage: null
+		}
+	);
 }
 
 export interface EmailPreviewInput {

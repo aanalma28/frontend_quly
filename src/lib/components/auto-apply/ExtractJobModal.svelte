@@ -3,6 +3,8 @@
 	import {
 		AlertTriangle,
 		CheckCircle2,
+		ChevronLeft,
+		ChevronRight,
 		FileImage,
 		FileText,
 		Image as ImageIcon,
@@ -11,7 +13,11 @@
 		X
 	} from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
-	import { extractExternalJobApi, type ExtractedJob } from '#lib/services/autoApplyApi.js';
+	import {
+		extractExternalJobsApi,
+		type ExternalJobExtractionResult,
+		type ExtractedJob
+	} from '#lib/services/autoApplyApi.js';
 	import type { AutoApplyJobOption } from '#lib/services/autoApplyApi.js';
 	import { updateExtractedJobApi } from '#lib/services/jobApi.js';
 	import type { UserBenefitQuota } from '#lib/services/billingApi.js';
@@ -30,13 +36,18 @@
 
 	let { open, benefit = null, creditBalance = 0, onclose, onadded, onusage }: Props = $props();
 
+	type ImageUpload = { file: File; preview: string };
+
 	let mode = $state<'text' | 'image'>('text');
 	let text = $state('');
-	let imageFile = $state<File | null>(null);
-	let imagePreview = $state<string | null>(null);
+	let imageFiles = $state<ImageUpload[]>([]);
 	let isLoading = $state(false);
 	let error = $state<string | null>(null);
 	let result = $state<ExtractedJob | null>(null);
+	let results = $state<ExtractedJob[]>([]);
+	let resultIndex = $state(0);
+	let invalidFiles = $state<string[]>([]);
+	let progress = $state<{ done: number; total: number } | null>(null);
 	let formError = $state<string | null>(null);
 	let usageMessage = $state<string | null>(null);
 	let reanalyseConfirmOpen = $state(false);
@@ -56,21 +67,23 @@
 		};
 	});
 
-	function revokePreview() {
-		if (imagePreview) {
-			URL.revokeObjectURL(imagePreview);
-			imagePreview = null;
-		}
+	function revokePreviews() {
+		for (const image of imageFiles) URL.revokeObjectURL(image.preview);
 	}
 
 	function reset() {
 		mode = 'text';
 		text = '';
-		imageFile = null;
-		revokePreview();
+		const previousImages = imageFiles;
+		imageFiles = [];
+		for (const image of previousImages) URL.revokeObjectURL(image.preview);
 		isLoading = false;
 		error = null;
 		result = null;
+		results = [];
+		resultIndex = 0;
+		invalidFiles = [];
+		progress = null;
 		formError = null;
 		usageMessage = null;
 		reanalyseConfirmOpen = false;
@@ -84,6 +97,9 @@
 	function confirmReanalyse() {
 		reanalyseConfirmOpen = false;
 		result = null;
+		results = [];
+		resultIndex = 0;
+		invalidFiles = [];
 		formError = null;
 		usageMessage = null;
 	}
@@ -94,26 +110,83 @@
 		onclose();
 	}
 
-	function selectFile(file: File | undefined) {
+	function goResult(direction: -1 | 1) {
+		if (!result || results.length < 2) return;
+		const current = result;
+		const nextIndex = resultIndex + direction;
+		if (nextIndex < 0 || nextIndex >= results.length) return;
+		results = results.map((item, index) => (index === resultIndex ? current : item));
+		resultIndex = nextIndex;
+		result = results[nextIndex] ?? null;
+		formError = null;
+	}
+
+	function addFiles(files: File[]) {
 		error = null;
-		if (!file) return;
-		if (!['image/jpeg', 'image/jpg', 'image/png'].includes(file.type)) {
-			error = 'Poster harus berupa gambar JPG atau PNG.';
-			return;
+		const rejected: string[] = [];
+		const accepted: ImageUpload[] = [];
+		for (const file of files) {
+			if (!['image/jpeg', 'image/jpg', 'image/png'].includes(file.type)) {
+				rejected.push(`${file.name}: bukan gambar JPG/PNG`);
+				continue;
+			}
+			if (file.size > 5 * 1024 * 1024) {
+				rejected.push(`${file.name}: ukuran lebih dari 5 MB`);
+				continue;
+			}
+			accepted.push({ file, preview: URL.createObjectURL(file) });
 		}
-		if (file.size > 5 * 1024 * 1024) {
-			error = 'Ukuran poster maksimal 5 MB.';
-			return;
+		if (accepted.length > 0) {
+			const combined = [...imageFiles, ...accepted];
+			imageFiles = combined.slice(0, 10);
+			if (combined.length > 10) {
+				error = 'Maksimal 10 gambar dalam satu proses ekstraksi.';
+			}
 		}
-		revokePreview();
-		imageFile = file;
-		imagePreview = URL.createObjectURL(file);
+		if (rejected.length > 0) {
+			error = rejected.join(' · ');
+		}
 	}
 
 	function handleFile(event: Event) {
 		const input = event.currentTarget as HTMLInputElement;
-		selectFile(input.files?.[0]);
+		addFiles(Array.from(input.files ?? []));
 		input.value = '';
+	}
+
+	function handleDrop(event: DragEvent) {
+		event.preventDefault();
+		if (isLoading || mode !== 'image') return;
+		addFiles(Array.from(event.dataTransfer?.files ?? []));
+	}
+
+	function removeImage(index: number) {
+		const image = imageFiles[index];
+		if (!image) return;
+		URL.revokeObjectURL(image.preview);
+		imageFiles = imageFiles.filter((_, itemIndex) => itemIndex !== index);
+	}
+
+	function toExtractedJob(response: ExternalJobExtractionResult): ExtractedJob {
+		return {
+			id: response.job?.id ?? response.jobId ?? undefined,
+			jobId: response.jobId ?? response.job?.id ?? undefined,
+			companyName: response.job?.companyName ?? '',
+			jobTitle: response.job?.jobTitle ?? '',
+			recipientEmail: response.job?.recipientEmail ?? '',
+			description: response.job?.description ?? '',
+			subjectFormat: response.job?.subjectFormat ?? null,
+			applicationInstructions: response.job?.applicationInstructions ?? null,
+			location: response.job?.location ?? null,
+			workplaceType: response.job?.workplaceType ?? null,
+			employmentType: response.job?.employmentType ?? null,
+			applicationType: response.job?.applicationType ?? null,
+			applicationDestination: response.job?.applicationDestination ?? null,
+			sourceType: response.job?.sourceType ?? null,
+			createdById: response.job?.createdById ?? null,
+			isOwner: response.job?.isOwner,
+			canEdit: response.job?.canEdit
+		};
 	}
 
 	async function analyse() {
@@ -121,50 +194,59 @@
 		error = null;
 		formError = null;
 		result = null;
+		results = [];
+		resultIndex = 0;
+		invalidFiles = [];
 		usageMessage = null;
 
 		if (mode === 'text' && !text.trim()) {
 			error = 'Tempel teks lowongan terlebih dahulu.';
 			return;
 		}
-		if (mode === 'image' && !imageFile) {
-			error = 'Pilih gambar poster lowongan terlebih dahulu.';
+		if (mode === 'image' && imageFiles.length === 0) {
+			error = 'Pilih minimal satu gambar poster lowongan terlebih dahulu.';
 			return;
 		}
 
+		const files = mode === 'image' ? imageFiles.map((item) => item.file) : [];
+		const total = mode === 'image' ? files.length : 1;
+		const collected: ExtractedJob[] = [];
+		const rejected: string[] = [];
+		let creditsCharged = 0;
+		let deduplicatedCount = 0;
+
 		isLoading = true;
+		progress = { done: 0, total };
 		try {
-			const response = await extractExternalJobApi({
+			const response = await extractExternalJobsApi({
 				text: mode === 'text' ? text : undefined,
-				image: mode === 'image' ? imageFile : null
+				images: mode === 'image' ? files : undefined
 			});
 			onusage?.();
-			if (!response.valid) {
-				error = response.reason || 'Konten yang dikirim bukan lowongan kerja.';
-				return;
+
+			response.items.forEach((item, index) => {
+				const label = files[index]?.name ?? 'Teks loker';
+				if (!item.valid || !item.job) {
+					rejected.push(`${label}: ${item.reason || 'bukan lowongan kerja'}`);
+					return;
+				}
+				collected.push(toExtractedJob(item));
+				creditsCharged += item.usage?.creditsCharged ?? 0;
+				if (item.deduplicated) deduplicatedCount += 1;
+			});
+
+			progress = { done: total, total };
+			results = collected;
+			resultIndex = 0;
+			result = collected[0] ?? null;
+			invalidFiles = rejected;
+			if (collected.length > 0) {
+				const deduplicatedCopy =
+					deduplicatedCount > 0 ? ` · ${deduplicatedCount} duplikat tidak memakai kuota` : '';
+				usageMessage = `${collected.length} loker berhasil diekstrak${creditsCharged > 0 ? ` · ${creditsCharged} kredit terpakai` : ' · menggunakan kuota paket'}${deduplicatedCopy}${rejected.length > 0 ? ` · ${rejected.length} gambar gagal` : ''}.`;
+			} else if (!error) {
+				error = 'Tidak ada gambar yang berhasil diekstrak sebagai lowongan kerja.';
 			}
-			result = {
-				id: response.job?.id ?? response.jobId ?? undefined,
-				jobId: response.jobId ?? response.job?.id ?? undefined,
-				companyName: response.job?.companyName ?? '',
-				jobTitle: response.job?.jobTitle ?? '',
-				recipientEmail: response.job?.recipientEmail ?? '',
-				description: response.job?.description ?? '',
-				subjectFormat: response.job?.subjectFormat ?? null,
-				applicationInstructions: response.job?.applicationInstructions ?? null,
-				location: response.job?.location ?? null,
-				workplaceType: response.job?.workplaceType ?? null,
-				employmentType: response.job?.employmentType ?? null,
-				applicationType: response.job?.applicationType ?? null,
-				applicationDestination: response.job?.applicationDestination ?? null,
-				sourceType: response.job?.sourceType ?? null,
-				createdById: response.job?.createdById ?? null,
-				isOwner: response.job?.isOwner,
-				canEdit: response.job?.canEdit
-			};
-			usageMessage = response.charged
-				? `Ekstraksi selesai. ${response.usage.creditsCharged > 0 ? `${response.usage.creditsCharged} kredit terpakai.` : 'Menggunakan kuota paket.'}`
-				: 'Konten tidak valid; kuota/kredit dikembalikan.';
 		} catch (caught) {
 			if (caught instanceof ApiError && caught.code === 'BENEFIT_QUOTA_EXHAUSTED') {
 				error = `${caught.message}. Top-up kredit untuk melanjutkan ekstraksi.`;
@@ -173,6 +255,7 @@
 			}
 		} finally {
 			isLoading = false;
+			progress = null;
 		}
 	}
 
@@ -264,12 +347,23 @@
 			needsEmail: !recipientEmail,
 			selected: true
 		});
-		reset();
-		onclose();
+
+		if (results.length > 1) {
+			const remaining = results.filter((_, index) => index !== resultIndex);
+			results = remaining;
+			const nextIndex = Math.min(resultIndex, remaining.length - 1);
+			resultIndex = nextIndex;
+			result = remaining[nextIndex] ?? null;
+			usageMessage = `${remaining.length} hasil lain masih menunggu koreksi.`;
+			formError = null;
+		} else {
+			reset();
+			onclose();
+		}
 	}
 
 	onDestroy(() => {
-		revokePreview();
+		revokePreviews();
 	});
 </script>
 
@@ -348,24 +442,54 @@
 						</label>
 					{:else}
 						<div>
-							<label class="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/60 px-4 py-8 text-center transition hover:border-indigo-300 hover:bg-indigo-50/40">
-								{#if imagePreview}
-									<span class="flex size-16 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-white">
-										<img src={imagePreview} alt="Pratinjau poster" class="max-h-16 w-full object-contain" />
-									</span>
-								{:else}
-									<span class="flex size-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600"><ImageIcon size={22} /></span>
-								{/if}
-								<span class="mt-3 text-xs font-semibold text-slate-700">
-									{imageFile ? imageFile.name : 'Pilih poster JPG/PNG'}
+							<label
+								class="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50/60 px-4 py-7 text-center transition hover:border-indigo-300 hover:bg-indigo-50/40"
+								ondragover={(event) => event.preventDefault()}
+								ondrop={handleDrop}
+							>
+								<span class="flex size-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+									<ImageIcon size={22} />
 								</span>
-								<span class="mt-1 text-[10px] text-slate-400">Maksimal 5 MB</span>
-								<input type="file" accept="image/jpeg,image/png" onchange={handleFile} class="sr-only" />
+								<span class="mt-3 text-xs font-semibold text-slate-700">
+									{imageFiles.length > 0
+										? `${imageFiles.length} poster dipilih`
+										: 'Pilih atau seret beberapa poster JPG/PNG'}
+								</span>
+								<span class="mt-1 text-[10px] text-slate-400">
+									Bisa drag &amp; drop massal · maksimal 10 gambar · 5 MB per gambar
+								</span>
+								<input
+									type="file"
+									accept="image/jpeg,image/png"
+									multiple
+									onchange={handleFile}
+									class="sr-only"
+								/>
 							</label>
-							{#if imageFile}
-								<button type="button" onclick={() => { imageFile = null; revokePreview(); }} class="mt-2 text-[10px] font-semibold text-rose-600 hover:text-rose-800">
-									Hapus gambar
-								</button>
+
+							{#if imageFiles.length > 0}
+								<div class="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+									{#each imageFiles as image, index (image.preview)}
+										<div class="group relative overflow-hidden rounded-lg border border-slate-200 bg-white">
+											<img
+												src={image.preview}
+												alt={`Poster ${index + 1}`}
+												class="h-20 w-full object-cover"
+											/>
+											<button
+												type="button"
+												onclick={() => removeImage(index)}
+												class="absolute right-1 top-1 inline-flex size-5 items-center justify-center rounded-full bg-slate-950/75 text-white opacity-90 transition hover:bg-rose-600"
+												aria-label={`Hapus ${image.file.name}`}
+											>
+												<X size={12} />
+											</button>
+											<p class="truncate px-1.5 py-1 text-[8px] text-slate-500" title={image.file.name}>
+												{image.file.name}
+											</p>
+										</div>
+									{/each}
+								</div>
 							{/if}
 						</div>
 					{/if}
@@ -375,17 +499,40 @@
 							<p class="flex items-start gap-1.5"><AlertTriangle size={14} class="mt-0.5 shrink-0" /> {error}</p>
 						</div>
 					{/if}
+					{#if invalidFiles.length > 0}
+						<div class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] leading-5 text-amber-800" role="status">
+							<p class="font-semibold">Sebagian gambar tidak dapat diproses:</p>
+							<ul class="mt-1 list-inside list-disc">
+								{#each invalidFiles.slice(0, 5) as item}
+									<li>{item}</li>
+								{/each}
+							</ul>
+						</div>
+					{/if}
+
+					{#if mode === 'image' && imageFiles.length > 1}
+						<p class="text-[10px] text-slate-500">
+							{imageFiles.length} gambar akan dianalisis satu per satu. Estimasi biaya:
+							<strong>{imageFiles.length}× ekstraksi</strong>.
+						</p>
+					{/if}
 
 					<button
 						type="button"
 						onclick={() => void analyse()}
-						disabled={isLoading || blocked}
+						disabled={isLoading || blocked || (mode === 'image' && imageFiles.length === 0)}
 						class="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 text-sm font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
 					>
 						{#if isLoading}
-							<Spinner label="Menganalisis loker" /> Menganalisis & Memvalidasi Loker via AI...
+							<Spinner label="Menganalisis loker" />
+							{progress && progress.total > 1
+								? `Memproses batch ${progress.total} poster...`
+								: 'Menganalisis poster...'}
 						{:else}
-							<Sparkles size={16} /> Analisis & Validasi Loker
+							<Sparkles size={16} />
+							{mode === 'image' && imageFiles.length > 1
+								? `Analisis ${imageFiles.length} Poster`
+								: 'Analisis & Validasi Loker'}
 						{/if}
 					</button>
 				{:else}
@@ -400,6 +547,42 @@
 					</div>
 					{#if usageMessage}
 						<p class="text-[10px] text-slate-500">{usageMessage}</p>
+					{/if}
+					{#if invalidFiles.length > 0}
+						<details class="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[11px] text-amber-800">
+							<summary class="cursor-pointer font-semibold">
+								{invalidFiles.length} gambar gagal diproses
+							</summary>
+							<ul class="mt-1 list-inside list-disc space-y-1">
+								{#each invalidFiles as item}
+									<li>{item}</li>
+								{/each}
+							</ul>
+						</details>
+					{/if}
+
+					{#if results.length > 1}
+						<div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-indigo-100 bg-indigo-50/60 px-3 py-2.5">
+							<button
+								type="button"
+								onclick={() => goResult(-1)}
+								disabled={resultIndex === 0}
+								class="inline-flex h-8 items-center gap-1 rounded-lg border border-indigo-200 bg-white px-2.5 text-[10px] font-semibold text-indigo-700 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-40"
+							>
+								<ChevronLeft size={13} /> Sebelumnya
+							</button>
+							<span class="text-[10px] font-semibold text-indigo-700">
+								Hasil {resultIndex + 1} / {results.length}
+							</span>
+							<button
+								type="button"
+								onclick={() => goResult(1)}
+								disabled={resultIndex >= results.length - 1}
+								class="inline-flex h-8 items-center gap-1 rounded-lg border border-indigo-200 bg-white px-2.5 text-[10px] font-semibold text-indigo-700 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-40"
+							>
+								Selanjutnya <ChevronRight size={13} />
+							</button>
+						</div>
 					{/if}
 
 					<div class="grid gap-3 sm:grid-cols-2">

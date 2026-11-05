@@ -1,5 +1,13 @@
 <script lang="ts">
-	import { AlertTriangle, Mail, Send, Sparkles, X } from '@lucide/svelte';
+	import {
+		AlertTriangle,
+		ChevronLeft,
+		ChevronRight,
+		Mail,
+		Send,
+		Sparkles,
+		X
+	} from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import type { AutoApplyJobOption, EmailDraftPreview } from '#lib/services/autoApplyApi.js';
 	import { formatNumber } from '#lib/utils/billing.js';
@@ -32,6 +40,9 @@
 
 	const active = $derived(options.find((option) => option.key === activeKey) ?? options[0] ?? null);
 	const activePreview = $derived(active ? previews[active.key] ?? null : null);
+	const activeIndex = $derived(
+		Math.max(0, active ? options.findIndex((option) => option.key === active.key) : 0)
+	);
 	const loadingReviews = $derived(
 		options.some((option) => previews[option.key]?.loading)
 	);
@@ -53,6 +64,11 @@
 			document.body.style.overflow = previous;
 		};
 	});
+
+	function goTo(index: number) {
+		const option = options[index];
+		if (option) activeKey = option.key;
+	}
 
 	function close() {
 		if (sending) return;
@@ -93,6 +109,28 @@
 						Belum ada loker terpilih.
 					</p>
 				{:else}
+					<div class="mb-3 flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
+						<button
+							type="button"
+							onclick={() => goTo(activeIndex - 1)}
+							disabled={activeIndex <= 0 || sending}
+							class="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+						>
+							<ChevronLeft size={13} /> Sebelumnya
+						</button>
+						<span class="text-[10px] font-semibold text-slate-500">
+							Email {activeIndex + 1} / {options.length}
+						</span>
+						<button
+							type="button"
+							onclick={() => goTo(activeIndex + 1)}
+							disabled={activeIndex >= options.length - 1 || sending}
+							class="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-[10px] font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+						>
+							Selanjutnya <ChevronRight size={13} />
+						</button>
+					</div>
+
 					<div class="flex gap-1.5 overflow-x-auto pb-1">
 						{#each options as option (option.key)}
 							<button
