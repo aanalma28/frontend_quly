@@ -38,7 +38,8 @@
 	let isLoading = $state(true);
 	let isToggling = $state(false);
 	let error = $state<string | null>(null);
-	let pollTimer: ReturnType<typeof setInterval> | null = null;
+	let pollTimer: ReturnType<typeof setTimeout> | null = null;
+	let disposed = false;
 
 	let selectedMode = $state<TelegramScrapeMode>('CURSOR');
 	let selectedSourceIds = $state<string[]>([]);
@@ -161,6 +162,7 @@
 				sourceIds: selectedSourceIds,
 				maxMessagesPerSource: maxMessages
 			});
+			scheduleStatusPoll();
 			onchanged?.();
 		} catch (startError) {
 			runError =
@@ -180,6 +182,7 @@
 			if (isScrapeRunning) {
 				runError = null;
 				status = await stopTelegramScraperRunApi();
+				scheduleStatusPoll();
 				onchanged?.();
 			} else {
 				await toggle('STOP');
@@ -227,6 +230,19 @@
 		}
 	}
 
+	function scheduleStatusPoll() {
+		if (disposed) return;
+		if (pollTimer) {
+			clearTimeout(pollTimer);
+			pollTimer = null;
+		}
+		const delay = isScrapeRunning || isScrapeStopping ? 2500 : 5000;
+		pollTimer = setTimeout(async () => {
+			await load(true);
+			scheduleStatusPoll();
+		}, delay);
+	}
+
 	async function toggle(action: 'START' | 'STOP') {
 		if (isToggling) return;
 		isToggling = true;
@@ -245,12 +261,14 @@
 	}
 
 	onMount(() => {
+		disposed = false;
 		// Status-only on mount. Never call toggleTelegramScraperApi here:
 		// the listener must only start/stop from an explicit START/STOP click.
 		void load();
-		pollTimer = setInterval(() => void load(true), 5000);
+		scheduleStatusPoll();
 		return () => {
-			if (pollTimer) clearInterval(pollTimer);
+			disposed = true;
+			if (pollTimer) clearTimeout(pollTimer);
 			pollTimer = null;
 		};
 	});

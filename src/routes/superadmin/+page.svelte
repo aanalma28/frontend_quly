@@ -12,6 +12,7 @@
 	} from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import KpiCard from '#lib/components/superadmin/KpiCard.svelte';
+	import TelegramEndpointNotes from '#lib/components/superadmin/TelegramEndpointNotes.svelte';
 	import TelegramScraperControl from '#lib/components/superadmin/TelegramScraperControl.svelte';
 	import {
 		formatDate,
@@ -195,6 +196,8 @@
 				tone="amber"
 			/>
 		</section>
+
+		<TelegramEndpointNotes />
 
 		<section aria-labelledby="dashboard-telegram-scraping-title">
 			<details class="group overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60">
