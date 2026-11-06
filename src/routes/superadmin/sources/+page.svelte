@@ -1034,7 +1034,7 @@
 	</div>
 
 	<div id="telegram-scraper" class="scroll-mt-24">
-		<TelegramScraperControl onchanged={() => void load()} />
+		<TelegramScraperControl {sources} onchanged={() => void load()} />
 	</div>
 </div>
 

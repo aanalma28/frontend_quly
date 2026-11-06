@@ -1,26 +1,50 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { CheckCircle2, Play, Power, RefreshCw, Square, TriangleAlert } from '@lucide/svelte';
+	import {
+		ArrowRight,
+		CalendarClock,
+		CheckCircle2,
+		History,
+		ListChecks,
+		Play,
+		Power,
+		RefreshCw,
+		Square,
+		TriangleAlert
+	} from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
-	import { formatDate } from './format.js';
+	import { formatDate, formatNumber } from './format.js';
 	import {
 		getTelegramStatusApi,
+		runTelegramScraperApi,
 		toggleTelegramScraperApi,
+		type IngestionSource,
+		type TelegramScrapeMode,
+		type TelegramScrapeRunStatus,
 		type TelegramScraperStatus
 	} from '#lib/services/superadminApi.js';
 
 	interface Props {
 		/** Called after the listener state changes so the parent can refresh data. */
 		onchanged?: () => void;
+		/** Full source list from the parent; the component filters active Telegram sources. */
+		sources?: IngestionSource[];
 	}
 
-	let { onchanged }: Props = $props();
+	let { onchanged, sources = [] }: Props = $props();
 
 	let status = $state<TelegramScraperStatus | null>(null);
 	let isLoading = $state(true);
 	let isToggling = $state(false);
 	let error = $state<string | null>(null);
 	let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+	let selectedMode = $state<TelegramScrapeMode>('CURSOR');
+	let selectedSourceIds = $state<string[]>([]);
+	let maxMessagesInput = $state('1000');
+	let isStartingRun = $state(false);
+	let runError = $state<string | null>(null);
+	let previousRunStatus = 'IDLE';
 
 	const isRunning = $derived(Boolean(status?.enabled && status?.connected));
 	const isEnabled = $derived(Boolean(status?.enabled));
@@ -37,6 +61,112 @@
 				? 'bg-amber-500/10 text-amber-300 ring-amber-500/30'
 				: 'bg-slate-800 text-slate-400 ring-slate-700'
 	);
+
+	const telegramSources = $derived(
+		sources
+			.filter((source) => source.type === 'TELEGRAM' && source.isActive)
+			.slice()
+			.sort((left, right) => left.name.localeCompare(right.name))
+	);
+	const scrapeRun = $derived(status?.scrapeRun ?? null);
+	const isScrapeRunning = $derived(scrapeRun?.status === 'RUNNING');
+	const maxMessages = $derived.by(() => {
+		const raw = String(maxMessagesInput ?? '').trim();
+		if (!raw) return 1000;
+		const parsed = Number(raw);
+		if (!Number.isFinite(parsed)) return 1000;
+		return Math.min(5000, Math.max(1, Math.trunc(parsed)));
+	});
+	const runProgress = $derived.by(() => {
+		if (!scrapeRun || scrapeRun.totalSources <= 0) return 0;
+		return Math.min(
+			100,
+			Math.max(0, Math.round((scrapeRun.processedSources / scrapeRun.totalSources) * 100))
+		);
+	});
+	const canStartRun = $derived(
+		Boolean(configReady) &&
+			telegramSources.length > 0 &&
+			!isScrapeRunning &&
+			!isStartingRun &&
+			!status?.isConnecting &&
+			!status?.isDisconnecting
+	);
+	const modeNote = $derived(
+		selectedMode === 'CURSOR'
+			? 'Melanjutkan dari pesan terakhir yang sudah diproses. Gunakan untuk catch-up pesan baru.'
+			: 'Mengambil seluruh pesan Telegram sejak 00:00 hari ini. Gunakan untuk scraping massal harian. Pesan yang sudah pernah masuk tidak diduplikasi.'
+	);
+
+	$effect(() => {
+		const available = new Set(telegramSources.map((source) => source.id));
+		if (selectedSourceIds.some((id) => !available.has(id))) {
+			selectedSourceIds = selectedSourceIds.filter((id) => available.has(id));
+		}
+	});
+
+	function runStatusLabel(value: TelegramScrapeRunStatus['status']): string {
+		if (value === 'RUNNING') return 'Berjalan';
+		if (value === 'COMPLETED') return 'Selesai';
+		if (value === 'FAILED') return 'Gagal';
+		return 'Belum ada run';
+	}
+
+	function runStatusTone(value: TelegramScrapeRunStatus['status']): string {
+		if (value === 'RUNNING') return 'bg-sky-500/10 text-sky-300 ring-sky-500/30';
+		if (value === 'COMPLETED') return 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30';
+		if (value === 'FAILED') return 'bg-rose-500/10 text-rose-300 ring-rose-500/30';
+		return 'bg-slate-800 text-slate-400 ring-slate-700';
+	}
+
+	function toggleSource(sourceId: string, checked: boolean) {
+		selectedSourceIds = checked
+			? [...new Set([...selectedSourceIds, sourceId])]
+			: selectedSourceIds.filter((id) => id !== sourceId);
+	}
+
+	function selectAllSources() {
+		selectedSourceIds = telegramSources.map((source) => source.id);
+	}
+
+	function clearSourceSelection() {
+		selectedSourceIds = [];
+	}
+
+	async function startScrapeRun(mode: TelegramScrapeMode) {
+		if (!canStartRun) return;
+		selectedMode = mode;
+		isStartingRun = true;
+		runError = null;
+		try {
+			status = await runTelegramScraperApi({
+				mode,
+				sourceIds: selectedSourceIds,
+				maxMessagesPerSource: maxMessages
+			});
+			onchanged?.();
+		} catch (startError) {
+			runError =
+				startError instanceof Error
+					? startError.message
+					: 'Scraping Telegram belum dapat dijalankan.';
+		} finally {
+			isStartingRun = false;
+		}
+	}
+
+	$effect(() => {
+		const nextStatus = scrapeRun?.status ?? 'IDLE';
+		if (nextStatus === previousRunStatus) return;
+		const wasRunning = previousRunStatus === 'RUNNING';
+		previousRunStatus = nextStatus;
+		if (nextStatus === 'RUNNING' && scrapeRun?.mode) {
+			selectedMode = scrapeRun.mode;
+		}
+		if (wasRunning && (nextStatus === 'COMPLETED' || nextStatus === 'FAILED')) {
+			onchanged?.();
+		}
+	});
 
 	async function load(silent = false) {
 		if (!silent) isLoading = true;
@@ -133,10 +263,12 @@
 			<button
 				type="button"
 				onclick={() => void toggle('START')}
-				disabled={isToggling || isLoading || isEnabled || !configReady}
+				disabled={isToggling || isLoading || isEnabled || !configReady || isScrapeRunning || isStartingRun}
 				title={!configReady
 					? 'Lengkapi TELEGRAM_API_ID, TELEGRAM_API_HASH, dan TELEGRAM_SESSION_STRING di backend'
-					: 'Mulai listener Telegram'}
+					: isScrapeRunning
+						? 'Tunggu scrape massal selesai sebelum menyalakan listener'
+						: 'Mulai listener Telegram'}
 				class="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
 			>
 				{#if isToggling && !isEnabled}
@@ -205,6 +337,267 @@
 				</span>
 			</div>
 		</div>
+	</div>
+
+	<div class="border-t border-slate-800 bg-slate-950/30 px-5 py-5">
+		<div class="flex flex-wrap items-start justify-between gap-3">
+			<div>
+				<p class="text-[10px] font-semibold uppercase tracking-[0.14em] text-indigo-300">
+					Scraping massal
+				</p>
+				<h3 class="mt-1 text-sm font-semibold text-white">Jalankan scrape satu kali</h3>
+				<p class="mt-1 max-w-2xl text-xs leading-5 text-slate-400">
+					START/STOP di atas untuk listener berkelanjutan. Scrape massal berjalan terpisah,
+					menghasilkan satu run, dan bisa dipantau lewat progress di bawah.
+				</p>
+			</div>
+			<span class="rounded-full bg-indigo-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-indigo-300 ring-1 ring-inset ring-indigo-500/30">
+				{selectedMode}
+			</span>
+		</div>
+
+		<div class="mt-4">
+			<p class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Mode scraping</p>
+			<div class="mt-2 inline-flex rounded-lg border border-slate-700 bg-slate-900 p-1">
+				<button
+					type="button"
+					aria-pressed={selectedMode === 'CURSOR'}
+					onclick={() => (selectedMode = 'CURSOR')}
+					disabled={isScrapeRunning || isStartingRun}
+					class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition {selectedMode ===
+					'CURSOR'
+						? 'bg-indigo-500 text-white'
+						: 'text-slate-400 hover:text-white'} disabled:cursor-not-allowed disabled:opacity-50"
+				>
+					<History size={13} /> CURSOR
+				</button>
+				<button
+					type="button"
+					aria-pressed={selectedMode === 'TODAY'}
+					onclick={() => (selectedMode = 'TODAY')}
+					disabled={isScrapeRunning || isStartingRun}
+					class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition {selectedMode ===
+					'TODAY'
+						? 'bg-indigo-500 text-white'
+						: 'text-slate-400 hover:text-white'} disabled:cursor-not-allowed disabled:opacity-50"
+				>
+					<CalendarClock size={13} /> TODAY
+				</button>
+			</div>
+			<p class="mt-2 text-xs leading-5 text-slate-400">{modeNote}</p>
+		</div>
+
+		<div class="mt-4 grid gap-3 lg:grid-cols-2">
+			<div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+				<div class="flex items-center justify-between gap-2">
+					<p class="flex items-center gap-1.5 text-xs font-semibold text-slate-200">
+						<ListChecks size={14} class="text-indigo-300" /> Source Telegram aktif
+					</p>
+					<span class="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-bold text-slate-300">
+						{telegramSources.length}
+					</span>
+				</div>
+				<div class="mt-3 max-h-44 space-y-1.5 overflow-y-auto pr-1">
+					{#each telegramSources as source (source.id)}
+						<label class="flex cursor-pointer items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 text-xs text-slate-300 transition hover:border-slate-700 hover:bg-slate-800/60">
+							<input
+								type="checkbox"
+								checked={selectedSourceIds.includes(source.id)}
+								disabled={isScrapeRunning || isStartingRun}
+								onchange={(event) =>
+									toggleSource(source.id, event.currentTarget.checked)}
+								class="size-3.5 rounded border-slate-600 bg-slate-950 text-indigo-500 focus:ring-indigo-500"
+							/>
+							<span class="truncate" title={source.name}>{source.name}</span>
+						</label>
+					{:else}
+						<p class="rounded-lg border border-dashed border-slate-700 px-3 py-4 text-center text-xs text-slate-500">
+							Belum ada source Telegram aktif.
+						</p>
+					{/each}
+				</div>
+				<div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+					<p class="text-[10px] text-slate-500">
+						{selectedSourceIds.length === 0
+							? `Semua ${telegramSources.length} source aktif`
+							: `${selectedSourceIds.length} dari ${telegramSources.length} source dipilih`}
+					</p>
+					<div class="flex items-center gap-2">
+						<button
+							type="button"
+							onclick={selectAllSources}
+							disabled={telegramSources.length === 0 || isScrapeRunning || isStartingRun}
+							class="text-[10px] font-semibold text-indigo-300 transition hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-40"
+						>
+							Pilih semua
+						</button>
+						<button
+							type="button"
+							onclick={clearSourceSelection}
+							disabled={selectedSourceIds.length === 0 || isScrapeRunning || isStartingRun}
+							class="text-[10px] font-semibold text-slate-400 transition hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
+						>
+							Kosongkan
+						</button>
+					</div>
+				</div>
+				<p class="mt-1 text-[10px] leading-4 text-slate-500">
+					Kosong berarti semua source Telegram aktif. Pilih sebagian untuk membatasi source.
+				</p>
+			</div>
+
+			<div class="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+				<label class="block text-xs font-semibold text-slate-200" for="max-messages-per-source">
+					Max pesan per source
+				</label>
+				<input
+					id="max-messages-per-source"
+					type="number"
+					min="1"
+					max="5000"
+					step="1"
+					bind:value={maxMessagesInput}
+					onblur={() => (maxMessagesInput = String(maxMessages))}
+					disabled={isScrapeRunning || isStartingRun}
+					class="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 disabled:opacity-50"
+				/>
+				<p class="mt-1.5 text-[10px] leading-4 text-slate-500">
+					Default 1.000, maksimal 5.000. Nilai otomatis dibatasi saat scrape dijalankan.
+				</p>
+
+				<div class="mt-4 flex flex-col gap-2">
+					<button
+						type="button"
+						onclick={() => void startScrapeRun('CURSOR')}
+						disabled={!canStartRun}
+						class="inline-flex h-10 items-center justify-center gap-2 rounded-lg px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 {selectedMode ===
+						'CURSOR'
+							? 'bg-indigo-500 text-white hover:bg-indigo-400'
+							: 'border border-slate-700 text-slate-300 hover:bg-slate-800'}"
+					>
+						{#if isStartingRun && selectedMode === 'CURSOR'}
+							<Spinner label="Memulai scrape CURSOR" />
+						{:else}
+							<History size={14} />
+						{/if}
+						Mulai Scrape CURSOR
+					</button>
+					<button
+						type="button"
+						onclick={() => void startScrapeRun('TODAY')}
+						disabled={!canStartRun}
+						class="inline-flex h-10 items-center justify-center gap-2 rounded-lg px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 {selectedMode ===
+						'TODAY'
+							? 'bg-indigo-500 text-white hover:bg-indigo-400'
+							: 'border border-slate-700 text-slate-300 hover:bg-slate-800'}"
+					>
+						{#if isStartingRun && selectedMode === 'TODAY'}
+							<Spinner label="Memulai scrape TODAY" />
+						{:else}
+							<CalendarClock size={14} />
+						{/if}
+						Mulai Scrape TODAY
+					</button>
+				</div>
+
+				{#if runError}
+					<p class="mt-3 rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-xs leading-5 text-rose-300" role="alert">
+						{runError}
+					</p>
+				{/if}
+				{#if isScrapeRunning}
+					<p class="mt-3 inline-flex items-center gap-1.5 text-[11px] font-medium text-sky-300">
+						<Spinner label="Scrape sedang berjalan" /> Scrape sedang berjalan...
+					</p>
+				{/if}
+			</div>
+		</div>
+
+		{#if scrapeRun && scrapeRun.status !== 'IDLE'}
+			<div class="mt-4 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+				<div class="flex flex-wrap items-center justify-between gap-2">
+					<div class="flex flex-wrap items-center gap-2">
+						<p class="text-xs font-semibold text-slate-200">Progress scrape</p>
+						<span class="rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ring-1 ring-inset {runStatusTone(scrapeRun.status)}">
+							{runStatusLabel(scrapeRun.status)}
+						</span>
+						{#if scrapeRun.mode}
+							<span class="text-[10px] font-semibold text-slate-500">{scrapeRun.mode}</span>
+						{/if}
+					</div>
+					<p class="text-[10px] text-slate-500">
+						{scrapeRun.processedSources}/{scrapeRun.totalSources} source · {runProgress}%
+					</p>
+				</div>
+
+				<div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-800">
+					<div
+						class="h-full rounded-full transition-all {scrapeRun.status === 'FAILED'
+							? 'bg-rose-500'
+							: scrapeRun.status === 'COMPLETED'
+								? 'bg-emerald-500'
+								: 'bg-sky-500'}"
+						style:width={`${runProgress}%`}
+					></div>
+				</div>
+
+				<div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+					<div class="rounded-lg bg-slate-950/60 px-2.5 py-2">
+						<p class="text-[9px] uppercase tracking-wide text-slate-500">Pesan diproses</p>
+						<p class="mt-0.5 text-sm font-bold text-slate-100">{formatNumber(scrapeRun.totalMessages)}</p>
+					</div>
+					<div class="rounded-lg bg-slate-950/60 px-2.5 py-2">
+						<p class="text-[9px] uppercase tracking-wide text-slate-500">Job masuk</p>
+						<p class="mt-0.5 text-sm font-bold text-emerald-300">{formatNumber(scrapeRun.ingestedJobs)}</p>
+					</div>
+					<div class="rounded-lg bg-slate-950/60 px-2.5 py-2">
+						<p class="text-[9px] uppercase tracking-wide text-slate-500">Dilewati</p>
+						<p class="mt-0.5 text-sm font-bold text-slate-100">{formatNumber(scrapeRun.skippedMessages)}</p>
+					</div>
+					<div class="rounded-lg bg-slate-950/60 px-2.5 py-2">
+						<p class="text-[9px] uppercase tracking-wide text-slate-500">Gagal</p>
+						<p class="mt-0.5 text-sm font-bold text-rose-300">{formatNumber(scrapeRun.failedMessages)}</p>
+					</div>
+				</div>
+
+				<div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-500">
+					{#if scrapeRun.currentSource}
+						<span>Source aktif: <strong class="text-slate-300">{scrapeRun.currentSource}</strong></span>
+					{/if}
+					<span>Mulai: {formatDate(scrapeRun.startedAt)}</span>
+					<span>Selesai: {formatDate(scrapeRun.finishedAt)}</span>
+				</div>
+
+				{#if scrapeRun.error}
+					<p class="mt-2 rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-xs leading-5 text-rose-300" role="alert">
+						{scrapeRun.error}
+					</p>
+				{/if}
+
+				{#if scrapeRun.status === 'COMPLETED' || scrapeRun.status === 'FAILED'}
+					<div class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2.5">
+						<p class="text-xs leading-5 text-slate-300">
+							{#if scrapeRun.status === 'COMPLETED'}
+								Scrape selesai. {formatNumber(scrapeRun.ingestedJobs)} job berhasil masuk dari
+								{formatNumber(scrapeRun.totalMessages)} pesan yang diproses.
+							{:else}
+								Scrape gagal. Periksa error di atas sebelum mencoba lagi.
+							{/if}
+						</p>
+						<a
+							href="/superadmin/jobs"
+							class="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-indigo-500 px-3 text-xs font-semibold text-white transition hover:bg-indigo-400"
+						>
+							<RefreshCw size={13} /> Refresh daftar job <ArrowRight size={13} />
+						</a>
+					</div>
+				{/if}
+			</div>
+		{:else}
+			<div class="mt-4 rounded-xl border border-dashed border-slate-800 bg-slate-900/40 px-4 py-3 text-xs text-slate-500">
+				Belum ada scrape run. Pilih mode dan source, lalu jalankan scrape.
+			</div>
+		{/if}
 	</div>
 
 	{#if !configReady && status && !isLoading}

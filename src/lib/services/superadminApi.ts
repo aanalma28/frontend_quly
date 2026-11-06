@@ -1331,14 +1331,48 @@ export async function deleteSourceApi(id: string): Promise<DeleteSourceResult> {
 }
 
 export type TelegramScraperAction = 'START' | 'STOP';
+export type TelegramScrapeMode = 'CURSOR' | 'TODAY';
+export type TelegramScrapeRunLifecycle = 'IDLE' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+
+export interface TelegramScrapeRunStatus {
+	status: TelegramScrapeRunLifecycle;
+	mode: TelegramScrapeMode | null;
+	startedAt: string | null;
+	finishedAt: string | null;
+	totalSources: number;
+	processedSources: number;
+	totalMessages: number;
+	ingestedJobs: number;
+	skippedMessages: number;
+	failedMessages: number;
+	currentSource: string | null;
+	error: string | null;
+}
 
 export interface TelegramScraperStatus {
+	status?: string;
 	enabled: boolean;
+	isRunning?: boolean;
+	isConnecting?: boolean;
+	isDisconnecting?: boolean;
 	connected: boolean;
 	startedAt: string | null;
 	lastError: string | null;
 	apiConfigured: boolean;
 	sessionConfigured: boolean;
+	messagesSeen?: number;
+	jobsIngested?: number;
+	scrapeRun?: TelegramScrapeRunStatus | null;
+}
+
+export interface TelegramRunInput {
+	mode: TelegramScrapeMode;
+	sourceIds?: string[];
+	maxMessagesPerSource?: number;
+}
+
+export interface TelegramRunResponse extends TelegramScraperStatus {
+	result: 'STARTED';
 }
 
 export async function getTelegramStatusApi(): Promise<TelegramScraperStatus> {
@@ -1351,4 +1385,14 @@ export async function toggleTelegramScraperApi(
 ): Promise<TelegramScraperStatus> {
 	const response = await apiRequest('superadmin/telegram/toggle', jsonInit('POST', { action }));
 	return (await response.json()) as TelegramScraperStatus;
+}
+
+export async function runTelegramScraperApi(
+	input: TelegramRunInput
+): Promise<TelegramRunResponse> {
+	const response = await apiRequest(
+		'superadmin/telegram/run',
+		jsonInit('POST', input)
+	);
+	return (await response.json()) as TelegramRunResponse;
 }
