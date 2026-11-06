@@ -126,7 +126,11 @@
 	onMount(async () => {
 		const authenticated = await initializeAuth();
 		if (!authenticated && !get(auth).error) {
-			await goto('/auth/login?redirectTo=%2Fbilling');
+			// Return to this status page after login, not to the purchase page.
+			const returnTo = `${page.url.pathname}${page.url.search}`;
+			await goto(`/auth/login?redirectTo=${encodeURIComponent(returnTo)}`, {
+				replaceState: true
+			});
 			return;
 		}
 		await refresh();

@@ -257,8 +257,13 @@ export async function login(
 		const allowedPrefix =
 			role === 'SUPER_ADMIN' ? '/superadmin' : role === 'ADMIN' ? '/admin' : '/dashboard';
 		let target = redirectTo && redirectTo.trim() ? redirectTo : home;
-		// Role menentukan area aplikasi yang boleh diakses setelah login.
-		if (!target.startsWith(allowedPrefix)) {
+		const targetPath = target.split('?')[0].split('#')[0];
+		// Billing/payment status is open to every logged-in role, so keep the
+		// requested target after login instead of falling back to the role home.
+		const isBillingRoute = targetPath === '/billing' || targetPath.startsWith('/billing/');
+		const isAllowedTarget =
+			targetPath === allowedPrefix || targetPath.startsWith(`${allowedPrefix}/`);
+		if (!isAllowedTarget && !isBillingRoute) {
 			target = home;
 		}
 		const safeRedirect =

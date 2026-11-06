@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { get } from 'svelte/store';
 	import {
 		ArrowLeft,
@@ -26,7 +26,6 @@
 		listPaymentsApi,
 		subscribePackageApi,
 		subscribePlanApi,
-		syncPaymentApi,
 		topupCreditApi,
 		type BillingPayment,
 		type MidtransConfigResponse,
@@ -72,6 +71,7 @@
 	let snapReady = $state(false);
 	let paymentNotice = $state<string | null>(null);
 	let paymentError = $state<string | null>(null);
+	let redirectingToStatus = $state(false);
 
 	let payments = $state<PaymentListResponse | null>(null);
 	let paymentsLoading = $state(true);
@@ -203,22 +203,30 @@
 		selectedPlanId = null;
 		selectedTopUpId = null;
 
+		let navigating = false;
 		const goToReturn = (target: 'finish' | 'unfinish' | 'error') => {
-			window.location.assign(
-				`/billing/payment/${target}?paymentId=${encodeURIComponent(payment.id)}`
-			);
+			if (navigating) return;
+			navigating = true;
+			// Cover the billing UI before changing route. Snap closes before the
+			// callback fires, so without this the purchase page can flash while
+			// the status page is being loaded.
+			redirectingToStatus = true;
+			void tick()
+				.then(() =>
+					goto(`/billing/payment/${target}?paymentId=${encodeURIComponent(payment.id)}`, {
+						replaceState: true
+					})
+				)
+				.catch((error) => {
+					redirectingToStatus = false;
+					paymentError =
+						error instanceof Error ? error.message : 'Halaman status pembayaran gagal dibuka.';
+				});
 		};
 
 		if (snapReady && window.snap && payment.snapToken) {
 			window.snap.pay(payment.snapToken, {
-				onSuccess: async () => {
-					try {
-						await syncPaymentApi(payment.id);
-					} catch {
-						// The return page will retry synchronization.
-					}
-					goToReturn('finish');
-				},
+				onSuccess: () => goToReturn('finish'),
 				onPending: () => goToReturn('unfinish'),
 				onError: () => goToReturn('error'),
 				onClose: () => goToReturn('unfinish')
@@ -227,7 +235,7 @@
 		}
 
 		if (payment.redirectUrl) {
-			window.location.assign(payment.redirectUrl);
+			window.location.replace(payment.redirectUrl);
 			return;
 		}
 		throw new Error('Link pembayaran Midtrans tidak tersedia.');
@@ -325,6 +333,18 @@
 		content="Pilih paket Pejuang Loker atau tambahkan Kredit Kilat untuk melanjutkan lamaran otomatis."
 	/>
 </svelte:head>
+
+{#if redirectingToStatus}
+	<div
+		class="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-3 bg-white/95 px-4 text-center backdrop-blur-sm"
+		role="status"
+		aria-live="polite"
+	>
+		<Spinner label="Membuka status pembayaran" />
+		<p class="text-sm font-semibold text-slate-700">Membuka status pembayaran...</p>
+		<p class="text-xs text-slate-500">Jangan tutup halaman ini.</p>
+	</div>
+{/if}
 
 {#if $auth.isLoading}
 	<main class="flex min-h-screen items-center justify-center bg-[#f8f8fc] px-4 text-slate-500">
