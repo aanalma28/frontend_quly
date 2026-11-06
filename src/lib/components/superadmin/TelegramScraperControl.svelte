@@ -17,6 +17,7 @@
 	import {
 		getTelegramStatusApi,
 		runTelegramScraperApi,
+		stopTelegramScraperRunApi,
 		toggleTelegramScraperApi,
 		type IngestionSource,
 		type TelegramScrapeMode,
@@ -43,6 +44,7 @@
 	let selectedSourceIds = $state<string[]>([]);
 	let maxMessagesInput = $state('1000');
 	let isStartingRun = $state(false);
+	let isStoppingRun = $state(false);
 	let runError = $state<string | null>(null);
 	let previousRunStatus = 'IDLE';
 
@@ -70,6 +72,16 @@
 	);
 	const scrapeRun = $derived(status?.scrapeRun ?? null);
 	const isScrapeRunning = $derived(scrapeRun?.status === 'RUNNING');
+	const isScrapeStopping = $derived(scrapeRun?.status === 'STOPPING');
+	const isScrapeActive = $derived(isScrapeRunning || isScrapeStopping);
+	const canStopScraper = $derived(
+		!isLoading &&
+			!isToggling &&
+			!isStartingRun &&
+			!isStoppingRun &&
+			!isScrapeStopping &&
+			(isEnabled || isScrapeRunning || Boolean(status?.isConnecting))
+	);
 	const maxMessages = $derived.by(() => {
 		const raw = String(maxMessagesInput ?? '').trim();
 		if (!raw) return 1000;
@@ -87,8 +99,9 @@
 	const canStartRun = $derived(
 		Boolean(configReady) &&
 			telegramSources.length > 0 &&
-			!isScrapeRunning &&
+			!isScrapeActive &&
 			!isStartingRun &&
+			!isStoppingRun &&
 			!status?.isConnecting &&
 			!status?.isDisconnecting
 	);
@@ -107,14 +120,18 @@
 
 	function runStatusLabel(value: TelegramScrapeRunStatus['status']): string {
 		if (value === 'RUNNING') return 'Berjalan';
+		if (value === 'STOPPING') return 'Menghentikan';
 		if (value === 'COMPLETED') return 'Selesai';
+		if (value === 'CANCELLED') return 'Dibatalkan';
 		if (value === 'FAILED') return 'Gagal';
 		return 'Belum ada run';
 	}
 
 	function runStatusTone(value: TelegramScrapeRunStatus['status']): string {
 		if (value === 'RUNNING') return 'bg-sky-500/10 text-sky-300 ring-sky-500/30';
+		if (value === 'STOPPING') return 'bg-amber-500/10 text-amber-300 ring-amber-500/30';
 		if (value === 'COMPLETED') return 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30';
+		if (value === 'CANCELLED') return 'bg-slate-800 text-slate-300 ring-slate-700';
 		if (value === 'FAILED') return 'bg-rose-500/10 text-rose-300 ring-rose-500/30';
 		return 'bg-slate-800 text-slate-400 ring-slate-700';
 	}
@@ -155,15 +172,40 @@
 		}
 	}
 
+	async function stopScraper() {
+		if (!canStopScraper) return;
+		isStoppingRun = true;
+		error = null;
+		try {
+			if (isScrapeRunning) {
+				runError = null;
+				status = await stopTelegramScraperRunApi();
+				onchanged?.();
+			} else {
+				await toggle('STOP');
+			}
+		} catch (stopError) {
+			runError =
+				stopError instanceof Error
+					? stopError.message
+					: 'Scraper belum dapat dihentikan.';
+		} finally {
+			isStoppingRun = false;
+		}
+	}
+
 	$effect(() => {
 		const nextStatus = scrapeRun?.status ?? 'IDLE';
 		if (nextStatus === previousRunStatus) return;
-		const wasRunning = previousRunStatus === 'RUNNING';
+		const wasActive = previousRunStatus === 'RUNNING' || previousRunStatus === 'STOPPING';
 		previousRunStatus = nextStatus;
-		if (nextStatus === 'RUNNING' && scrapeRun?.mode) {
+		if ((nextStatus === 'RUNNING' || nextStatus === 'STOPPING') && scrapeRun?.mode) {
 			selectedMode = scrapeRun.mode;
 		}
-		if (wasRunning && (nextStatus === 'COMPLETED' || nextStatus === 'FAILED')) {
+		if (
+			wasActive &&
+			(nextStatus === 'COMPLETED' || nextStatus === 'CANCELLED' || nextStatus === 'FAILED')
+		) {
 			onchanged?.();
 		}
 	});
@@ -263,10 +305,10 @@
 			<button
 				type="button"
 				onclick={() => void toggle('START')}
-				disabled={isToggling || isLoading || isEnabled || !configReady || isScrapeRunning || isStartingRun}
+				disabled={isToggling || isLoading || isEnabled || !configReady || isScrapeActive || isStartingRun || isStoppingRun}
 				title={!configReady
 					? 'Lengkapi TELEGRAM_API_ID, TELEGRAM_API_HASH, dan TELEGRAM_SESSION_STRING di backend'
-					: isScrapeRunning
+					: isScrapeActive
 						? 'Tunggu scrape massal selesai sebelum menyalakan listener'
 						: 'Mulai listener Telegram'}
 				class="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
@@ -280,16 +322,17 @@
 			</button>
 			<button
 				type="button"
-				onclick={() => void toggle('STOP')}
-				disabled={isToggling || isLoading || !isEnabled}
+				onclick={() => void stopScraper()}
+				disabled={!canStopScraper}
+				title={isScrapeRunning ? 'Hentikan scrape massal yang sedang berjalan' : 'Matikan listener Telegram'}
 				class="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-rose-500 px-4 text-sm font-semibold text-white transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-40"
 			>
-				{#if isToggling && isEnabled}
+				{#if isToggling || isStoppingRun || isScrapeStopping}
 					<Spinner label="Menghentikan scraper" />
 				{:else}
 					<Square size={14} />
 				{/if}
-				Stop Scraper
+				{isScrapeStopping ? 'Menghentikan...' : 'Stop Scraper'}
 			</button>
 			<button
 				type="button"
@@ -363,7 +406,7 @@
 					type="button"
 					aria-pressed={selectedMode === 'CURSOR'}
 					onclick={() => (selectedMode = 'CURSOR')}
-					disabled={isScrapeRunning || isStartingRun}
+					disabled={isScrapeActive || isStartingRun || isStoppingRun}
 					class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition {selectedMode ===
 					'CURSOR'
 						? 'bg-indigo-500 text-white'
@@ -375,7 +418,7 @@
 					type="button"
 					aria-pressed={selectedMode === 'TODAY'}
 					onclick={() => (selectedMode = 'TODAY')}
-					disabled={isScrapeRunning || isStartingRun}
+					disabled={isScrapeActive || isStartingRun || isStoppingRun}
 					class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition {selectedMode ===
 					'TODAY'
 						? 'bg-indigo-500 text-white'
@@ -403,7 +446,7 @@
 							<input
 								type="checkbox"
 								checked={selectedSourceIds.includes(source.id)}
-								disabled={isScrapeRunning || isStartingRun}
+								disabled={isScrapeActive || isStartingRun || isStoppingRun}
 								onchange={(event) =>
 									toggleSource(source.id, event.currentTarget.checked)}
 								class="size-3.5 rounded border-slate-600 bg-slate-950 text-indigo-500 focus:ring-indigo-500"
@@ -426,7 +469,7 @@
 						<button
 							type="button"
 							onclick={selectAllSources}
-							disabled={telegramSources.length === 0 || isScrapeRunning || isStartingRun}
+							disabled={telegramSources.length === 0 || isScrapeActive || isStartingRun || isStoppingRun}
 							class="text-[10px] font-semibold text-indigo-300 transition hover:text-indigo-200 disabled:cursor-not-allowed disabled:opacity-40"
 						>
 							Pilih semua
@@ -434,7 +477,7 @@
 						<button
 							type="button"
 							onclick={clearSourceSelection}
-							disabled={selectedSourceIds.length === 0 || isScrapeRunning || isStartingRun}
+							disabled={selectedSourceIds.length === 0 || isScrapeActive || isStartingRun || isStoppingRun}
 							class="text-[10px] font-semibold text-slate-400 transition hover:text-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
 						>
 							Kosongkan
@@ -458,45 +501,28 @@
 					step="1"
 					bind:value={maxMessagesInput}
 					onblur={() => (maxMessagesInput = String(maxMessages))}
-					disabled={isScrapeRunning || isStartingRun}
+					disabled={isScrapeActive || isStartingRun || isStoppingRun}
 					class="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 disabled:opacity-50"
 				/>
 				<p class="mt-1.5 text-[10px] leading-4 text-slate-500">
 					Default 1.000, maksimal 5.000. Nilai otomatis dibatasi saat scrape dijalankan.
 				</p>
 
-				<div class="mt-4 flex flex-col gap-2">
+				<div class="mt-4">
 					<button
 						type="button"
-						onclick={() => void startScrapeRun('CURSOR')}
+						onclick={() => void startScrapeRun(selectedMode)}
 						disabled={!canStartRun}
-						class="inline-flex h-10 items-center justify-center gap-2 rounded-lg px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 {selectedMode ===
-						'CURSOR'
-							? 'bg-indigo-500 text-white hover:bg-indigo-400'
-							: 'border border-slate-700 text-slate-300 hover:bg-slate-800'}"
+						class="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-indigo-500 px-3 text-xs font-semibold text-white transition hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-40"
 					>
-						{#if isStartingRun && selectedMode === 'CURSOR'}
-							<Spinner label="Memulai scrape CURSOR" />
-						{:else}
+						{#if isStartingRun}
+							<Spinner label={`Memulai scrape ${selectedMode}`} />
+						{:else if selectedMode === 'CURSOR'}
 							<History size={14} />
-						{/if}
-						Mulai Scrape CURSOR
-					</button>
-					<button
-						type="button"
-						onclick={() => void startScrapeRun('TODAY')}
-						disabled={!canStartRun}
-						class="inline-flex h-10 items-center justify-center gap-2 rounded-lg px-3 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 {selectedMode ===
-						'TODAY'
-							? 'bg-indigo-500 text-white hover:bg-indigo-400'
-							: 'border border-slate-700 text-slate-300 hover:bg-slate-800'}"
-					>
-						{#if isStartingRun && selectedMode === 'TODAY'}
-							<Spinner label="Memulai scrape TODAY" />
 						{:else}
 							<CalendarClock size={14} />
 						{/if}
-						Mulai Scrape TODAY
+						Mulai Scrape {selectedMode}
 					</button>
 				</div>
 
@@ -505,9 +531,10 @@
 						{runError}
 					</p>
 				{/if}
-				{#if isScrapeRunning}
-					<p class="mt-3 inline-flex items-center gap-1.5 text-[11px] font-medium text-sky-300">
-						<Spinner label="Scrape sedang berjalan" /> Scrape sedang berjalan...
+				{#if isScrapeRunning || isScrapeStopping}
+					<p class="mt-3 inline-flex items-center gap-1.5 text-[11px] font-medium {isScrapeStopping ? 'text-amber-300' : 'text-sky-300'}">
+						<Spinner label={isScrapeStopping ? 'Menghentikan scrape' : 'Scrape sedang berjalan'} />
+						{isScrapeStopping ? 'Menghentikan scrape...' : 'Scrape sedang berjalan...'}
 					</p>
 				{/if}
 			</div>
@@ -536,7 +563,11 @@
 							? 'bg-rose-500'
 							: scrapeRun.status === 'COMPLETED'
 								? 'bg-emerald-500'
-								: 'bg-sky-500'}"
+								: scrapeRun.status === 'STOPPING'
+									? 'bg-amber-500'
+									: scrapeRun.status === 'CANCELLED'
+										? 'bg-slate-500'
+										: 'bg-sky-500'}"
 						style:width={`${runProgress}%`}
 					></div>
 				</div>
@@ -574,12 +605,15 @@
 					</p>
 				{/if}
 
-				{#if scrapeRun.status === 'COMPLETED' || scrapeRun.status === 'FAILED'}
+				{#if scrapeRun.status === 'COMPLETED' || scrapeRun.status === 'CANCELLED' || scrapeRun.status === 'FAILED'}
 					<div class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2.5">
 						<p class="text-xs leading-5 text-slate-300">
 							{#if scrapeRun.status === 'COMPLETED'}
 								Scrape selesai. {formatNumber(scrapeRun.ingestedJobs)} job berhasil masuk dari
 								{formatNumber(scrapeRun.totalMessages)} pesan yang diproses.
+							{:else if scrapeRun.status === 'CANCELLED'}
+								Scrape dibatalkan. {formatNumber(scrapeRun.ingestedJobs)} job sudah terlanjur masuk
+								dari {formatNumber(scrapeRun.totalMessages)} pesan yang diproses.
 							{:else}
 								Scrape gagal. Periksa error di atas sebelum mencoba lagi.
 							{/if}

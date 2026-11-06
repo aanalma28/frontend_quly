@@ -1332,7 +1332,13 @@ export async function deleteSourceApi(id: string): Promise<DeleteSourceResult> {
 
 export type TelegramScraperAction = 'START' | 'STOP';
 export type TelegramScrapeMode = 'CURSOR' | 'TODAY';
-export type TelegramScrapeRunLifecycle = 'IDLE' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+export type TelegramScrapeRunLifecycle =
+	| 'IDLE'
+	| 'RUNNING'
+	| 'STOPPING'
+	| 'COMPLETED'
+	| 'CANCELLED'
+	| 'FAILED';
 
 export interface TelegramScrapeRunStatus {
 	status: TelegramScrapeRunLifecycle;
@@ -1375,6 +1381,10 @@ export interface TelegramRunResponse extends TelegramScraperStatus {
 	result: 'STARTED';
 }
 
+export interface TelegramStopRunResponse extends TelegramScraperStatus {
+	result: 'STOPPED' | 'ALREADY_STOPPING' | 'ALREADY_STOPPED';
+}
+
 export async function getTelegramStatusApi(): Promise<TelegramScraperStatus> {
 	const response = await apiRequest('superadmin/telegram/status');
 	return (await response.json()) as TelegramScraperStatus;
@@ -1395,4 +1405,11 @@ export async function runTelegramScraperApi(
 		jsonInit('POST', input)
 	);
 	return (await response.json()) as TelegramRunResponse;
+}
+
+export async function stopTelegramScraperRunApi(): Promise<TelegramStopRunResponse> {
+	const response = await apiRequest('superadmin/telegram/run/stop', {
+		method: 'POST'
+	});
+	return (await response.json()) as TelegramStopRunResponse;
 }

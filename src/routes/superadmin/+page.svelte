@@ -4,6 +4,7 @@
 		ArrowRight,
 		Bot,
 		BriefcaseBusiness,
+		ChevronDown,
 		CircleDollarSign,
 		RefreshCw,
 		TrendingUp,
@@ -11,6 +12,7 @@
 	} from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import KpiCard from '#lib/components/superadmin/KpiCard.svelte';
+	import TelegramScraperControl from '#lib/components/superadmin/TelegramScraperControl.svelte';
 	import {
 		formatDate,
 		formatNumber,
@@ -28,7 +30,9 @@
 		getOverviewApi,
 		listJobsApi,
 		listPackagesApi,
+		listSourcesApi,
 		type AiCostsResponse,
+		type IngestionSource,
 		type OverviewResponse,
 		type ScrapedJob,
 		type SubscriptionPackage
@@ -40,6 +44,30 @@
 	let aiCosts = $state<AiCostsResponse | null>(null);
 	let isLoading = $state(true);
 	let loadError = $state<string | null>(null);
+	let telegramSources = $state<IngestionSource[]>([]);
+
+	async function loadTelegramSources() {
+		try {
+			telegramSources = await listSourcesApi();
+		} catch {
+			// Keep the previous source list and let the scraper control show its
+			// own status/error state.
+		}
+	}
+
+	async function refreshLatestJobs() {
+		try {
+			const jobList = await listJobsApi({ limit: 5 });
+			jobs = jobList.items ?? [];
+		} catch {
+			// Best-effort dashboard refresh.
+		}
+	}
+
+	function refreshAfterTelegramChange() {
+		void loadTelegramSources();
+		void refreshLatestJobs();
+	}
 
 	async function load() {
 		isLoading = true;
@@ -64,6 +92,7 @@
 
 	onMount(() => {
 		void load();
+		void loadTelegramSources();
 	});
 
 	const publishedJobs = $derived(overview?.jobs.byStatus?.PUBLISHED ?? 0);
@@ -165,6 +194,38 @@
 				icon={BriefcaseBusiness}
 				tone="amber"
 			/>
+		</section>
+
+		<section aria-labelledby="dashboard-telegram-scraping-title">
+			<details class="group overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/60">
+				<summary
+					class="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden"
+				>
+					<span class="flex min-w-0 items-center gap-3">
+						<span class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-300 ring-1 ring-inset ring-indigo-500/30">
+							<Bot size={17} />
+						</span>
+						<span class="min-w-0">
+							<span id="dashboard-telegram-scraping-title" class="block text-sm font-semibold text-white">
+								Telegram Scraping
+							</span>
+							<span class="mt-0.5 block text-[11px] text-slate-400">
+								Mode CURSOR/TODAY, pilih source, atur batas pesan, dan pantau progress scraping massal.
+							</span>
+						</span>
+					</span>
+					<ChevronDown
+						size={18}
+						class="shrink-0 text-slate-400 transition group-open:rotate-180"
+					/>
+				</summary>
+				<div class="border-t border-slate-800">
+					<TelegramScraperControl
+						sources={telegramSources}
+						onchanged={refreshAfterTelegramChange}
+					/>
+				</div>
+			</details>
 		</section>
 
 		<section class="grid gap-4 lg:grid-cols-3">
