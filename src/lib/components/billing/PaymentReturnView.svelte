@@ -16,15 +16,18 @@
 	import { auth, initializeAuth } from '#lib/stores/auth.js';
 	import {
 		getPaymentApi,
+		getSubscriptionApi,
 		listPaymentsApi,
 		syncPaymentApi,
 		type BillingPayment,
+		type BillingSubscriptionSnapshot,
 		type PaymentStatus
 	} from '#lib/services/billingApi.js';
 	import {
 		clearPendingPaymentId,
 		getPendingPaymentId
 	} from '#lib/utils/midtrans.js';
+	import { formatDateShort } from '#lib/components/superadmin/format.js';
 	import { formatRupiah } from '#lib/utils/billing.js';
 
 	interface Props {
@@ -34,6 +37,7 @@
 	let { mode }: Props = $props();
 
 	let payment = $state<BillingPayment | null>(null);
+	let subscription = $state<BillingSubscriptionSnapshot | null>(null);
 	let isLoading = $state(true);
 	let error = $state<string | null>(null);
 	let polling = $state(false);
@@ -86,6 +90,15 @@
 		return list.items.find((item) => item.orderId === orderId) ?? null;
 	}
 
+	async function loadSubscriptionSummary() {
+		try {
+			const data = await getSubscriptionApi();
+			subscription = data.subscription;
+		} catch {
+			subscription = null;
+		}
+	}
+
 	async function refresh() {
 		error = null;
 		isLoading = true;
@@ -98,6 +111,9 @@
 			}
 			payment = found;
 			if (isTerminal(found.status)) clearPendingPaymentId();
+			if (found.status === 'PAID' && found.type === 'SUBSCRIPTION') {
+				void loadSubscriptionSummary();
+			}
 		} catch (caught) {
 			error = caught instanceof Error ? caught.message : 'Status pembayaran belum dapat dimuat.';
 		} finally {
@@ -115,7 +131,12 @@
 				await new Promise((resolve) => setTimeout(resolve, 2000));
 				payment = await getPaymentApi(payment.id);
 			}
-			if (payment && isTerminal(payment.status)) clearPendingPaymentId();
+			if (payment && isTerminal(payment.status)) {
+				clearPendingPaymentId();
+				if (payment.status === 'PAID' && payment.type === 'SUBSCRIPTION') {
+					await loadSubscriptionSummary();
+				}
+			}
 		} catch (caught) {
 			error = caught instanceof Error ? caught.message : 'Polling pembayaran terhenti.';
 		} finally {
@@ -217,6 +238,18 @@
 						Kredit kamu sudah ditambahkan ke saldo Quly.
 					{/if}
 				</div>
+				{#if payment.type === 'SUBSCRIPTION' && subscription}
+					<div class="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-[11px] leading-5 text-slate-600">
+						{#if subscription.pendingPackage}
+							Downgrade ke <strong>{subscription.pendingPackage.name}</strong> dijadwalkan mulai
+							<strong>{subscription.pendingStartAt ? formatDateShort(subscription.pendingStartAt) : '—'}</strong>.
+							Paket <strong>{subscription.package.name}</strong> tetap aktif sampai tanggal tersebut.
+						{:else if subscription.endDate}
+							Paket aktif: <strong>{subscription.package.name}</strong> sampai
+							<strong>{formatDateShort(subscription.endDate)}</strong>.
+						{/if}
+					</div>
+				{/if}
 			{:else if payment.status === 'PENDING'}
 				<div class="mt-5 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-center text-xs leading-5 text-amber-800">
 					Pembayaran belum selesai. Selesaikan pembayaran di Midtrans atau cek kembali statusnya.

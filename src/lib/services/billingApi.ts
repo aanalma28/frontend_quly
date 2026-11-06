@@ -193,6 +193,47 @@ export interface PaymentListResponse {
 	};
 }
 
+export interface SubscriptionPolicy {
+	quotaStackMultiplier: number;
+	renewalQuotaPolicy: string;
+	upgradePolicy: string;
+	downgradePolicy: string;
+	expiryPolicy: string;
+}
+
+export interface BillingSubscriptionPackage {
+	id: string;
+	name: string;
+	tier: PackageTier;
+	priceIdr?: number;
+	billingPeriod?: BillingPeriod;
+	durationDays?: number;
+}
+
+export interface BillingSubscriptionSnapshot {
+	id: string;
+	status: 'ACTIVE' | 'EXPIRED' | 'CANCELLED';
+	package: BillingSubscriptionPackage;
+	pendingPackage: Pick<BillingSubscriptionPackage, 'id' | 'name' | 'tier'> | null;
+	pendingStartAt: string | null;
+	startDate: string | null;
+	endDate: string | null;
+	remainingDays: number | null;
+	expiredAt: string | null;
+	createdAt?: string;
+	updatedAt?: string;
+}
+
+export interface BillingSubscriptionResponse {
+	subscription: BillingSubscriptionSnapshot | null;
+	policy: SubscriptionPolicy;
+}
+
+export async function getSubscriptionApi(): Promise<BillingSubscriptionResponse> {
+	const response = await apiRequest('billing/subscription');
+	return (await response.json()) as BillingSubscriptionResponse;
+}
+
 export async function getMidtransConfigApi(): Promise<MidtransConfigResponse> {
 	const response = await fetch(getApiUrl('billing/midtrans/config'));
 	if (!response.ok) {

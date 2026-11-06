@@ -5,6 +5,8 @@
 	import {
 		ArrowLeft,
 		ArrowRight,
+		CalendarClock,
+		CalendarDays,
 		Check,
 		Clock3,
 		CreditCard,
@@ -13,6 +15,7 @@
 		History,
 		Mail,
 		RefreshCw,
+		ShieldCheck,
 		Sparkles,
 		Wallet,
 		XCircle,
@@ -23,11 +26,13 @@
 		getMidtransConfigApi,
 		getMyBenefitsApi,
 		getPublicBillingPlansApi,
+		getSubscriptionApi,
 		listPaymentsApi,
 		subscribePackageApi,
 		subscribePlanApi,
 		topupCreditApi,
 		type BillingPayment,
+		type BillingSubscriptionSnapshot,
 		type MidtransConfigResponse,
 		type MyBenefitsResponse,
 		type PaymentListResponse,
@@ -36,9 +41,11 @@
 		type TopupPackage
 	} from '#lib/services/billingApi.js';
 	import { tierLabel } from '#lib/components/superadmin/status.js';
-	import { formatDate } from '#lib/components/superadmin/format.js';
+	import type { PackageTier } from '#lib/services/superadminApi.js';
+	import { formatDate, formatDateShort } from '#lib/components/superadmin/format.js';
 	import RichText from '#lib/components/superadmin/RichText.svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
+	import SubscriptionChangeModal from '#lib/components/billing/SubscriptionChangeModal.svelte';
 	import { freeLifetimeRemaining } from '#lib/utils/benefitAccess.js';
 	import { loadSnapScript, savePendingPaymentId } from '#lib/utils/midtrans.js';
 	import {
@@ -48,6 +55,11 @@
 		isUnlimitedQuota,
 		quotaLabel
 	} from '#lib/utils/billing.js';
+	import {
+		buildSubscriptionChange,
+		subscriptionIsExpired,
+		type SubscriptionChangeDetails
+	} from '#lib/utils/subscription.js';
 
 	let plans = $state<PublicBillingPlan[]>([]);
 	let topupPackages = $state<TopupPackage[]>([]);
@@ -59,12 +71,24 @@
 	let benefitsLoading = $state(true);
 	let benefitsError = $state<string | null>(null);
 
+	let subscription = $state<BillingSubscriptionSnapshot | null>(null);
+	let subscriptionLoading = $state(true);
+	let subscriptionError = $state<string | null>(null);
+	let subscriptionApplicable = $state(true);
+
 	let selectedPlanId = $state<string | null>(null);
 	let selectedTopUpId = $state<string | null>(null);
 	let isSubscribing = $state(false);
 	let processingPayment = $state(false);
 	let subscribeMessage = $state<string | null>(null);
 	let subscribeError = $state(false);
+
+	let policyOpen = $state(false);
+	let policyTarget = $state<PublicBillingPlan | null>(null);
+	let policyChange = $state<SubscriptionChangeDetails | null>(null);
+	let policyLoading = $state(false);
+	let policyProcessing = $state(false);
+	let policyError = $state<string | null>(null);
 
 	let midtransConfig = $state<MidtransConfigResponse | null>(null);
 	let midtransLoading = $state(true);
@@ -81,11 +105,51 @@
 		return (get(auth).user?.subscriptionTier ?? '').toLowerCase();
 	}
 
-	function isPlanActive(plan: PublicBillingPlan): boolean {
+	function fallbackTier(): PackageTier {
 		const tier = userTier();
-		return [plan.planId, plan.tier, plan.name].some(
-			(value) => tier === value.toLowerCase()
-		);
+		if (tier.includes('unlimited')) return 'UNLIMITED';
+		if (tier.includes('pro')) return 'PRO';
+		if (tier.includes('starter')) return 'STARTER';
+		return 'FREE';
+	}
+
+	function activeSubscription(): BillingSubscriptionSnapshot | null {
+		return subscription && !subscriptionIsExpired(subscription) ? subscription : null;
+	}
+
+	function isPlanActive(plan: PublicBillingPlan): boolean {
+		const active = activeSubscription();
+		if (active) return active.package.id === plan.id;
+		if (subscription) return false;
+		const fallback = fallbackTier();
+		return plan.tier === fallback && (fallback !== 'FREE' || plan.planId === 'FREE_PLAN');
+	}
+
+	function isPlanPending(plan: PublicBillingPlan): boolean {
+		if (!subscription?.pendingPackage) return false;
+		return subscription.pendingPackage.id === plan.id;
+	}
+
+	function subscriptionStatusText(status: BillingSubscriptionSnapshot['status']): string {
+		if (status === 'ACTIVE') return 'Aktif';
+		if (status === 'EXPIRED') return 'Kedaluwarsa';
+		return 'Dibatalkan';
+	}
+
+	function subscriptionStatusClass(status: BillingSubscriptionSnapshot['status']): string {
+		if (status === 'ACTIVE') return 'bg-emerald-50 text-emerald-700 ring-emerald-200';
+		if (status === 'EXPIRED') return 'bg-amber-50 text-amber-700 ring-amber-200';
+		return 'bg-rose-50 text-rose-700 ring-rose-200';
+	}
+
+	function remainingDaysLabel(subscription: BillingSubscriptionSnapshot): string {
+		if (typeof subscription.remainingDays === 'number') {
+			return `${formatNumber(Math.max(0, subscription.remainingDays))} hari lagi`;
+		}
+		if (!subscription.endDate) return 'Tanggal berakhir belum tersedia';
+		const diff = new Date(subscription.endDate).getTime() - Date.now();
+		if (Number.isNaN(diff)) return 'Tanggal berakhir belum tersedia';
+		return `${formatNumber(Math.max(0, Math.ceil(diff / (24 * 60 * 60 * 1000))))} hari lagi`;
 	}
 
 	function planQuotaText(plan: PublicBillingPlan): string {
@@ -171,6 +235,20 @@
 		}
 	}
 
+	async function loadSubscription() {
+		subscriptionLoading = true;
+		subscriptionError = null;
+		try {
+			const data = await getSubscriptionApi();
+			subscription = data.subscription;
+		} catch (error) {
+			subscriptionError =
+				error instanceof Error ? error.message : 'Status langganan belum dapat dimuat.';
+		} finally {
+			subscriptionLoading = false;
+		}
+	}
+
 	function paymentStatusLabel(status: PaymentStatus): string {
 		switch (status) {
 			case 'PENDING':
@@ -241,24 +319,72 @@
 		throw new Error('Link pembayaran Midtrans tidak tersedia.');
 	}
 
-	async function checkoutPackage(plan: PublicBillingPlan) {
-		if (processingPayment) return;
+	async function preparePlanCheckout(plan: PublicBillingPlan) {
+		if (processingPayment || policyLoading || policyProcessing) return;
+		if (!subscriptionApplicable) {
+			paymentError = 'Pembelian paket hanya tersedia untuk akun Job Seeker.';
+			return;
+		}
 		if (!midtransConfig?.configured) {
 			paymentError = 'Pembayaran Midtrans belum dikonfigurasi oleh admin.';
 			return;
 		}
+
 		selectedPlanId = plan.id;
-		processingPayment = true;
+		policyLoading = true;
+		policyError = null;
 		paymentError = null;
-		paymentNotice = 'Membuat transaksi pembayaran...';
+		paymentNotice = 'Memeriksa ketentuan perubahan langganan...';
+
+		try {
+			const data = await getSubscriptionApi();
+			subscription = data.subscription;
+			subscriptionError = null;
+			policyChange = buildSubscriptionChange(data.subscription, plan, data.policy);
+			policyTarget = plan;
+			policyOpen = true;
+			paymentNotice = null;
+		} catch (error) {
+			paymentNotice = null;
+			selectedPlanId = null;
+			paymentError =
+				error instanceof Error
+					? error.message
+					: 'Ketentuan perubahan langganan belum dapat dimuat.';
+		} finally {
+			policyLoading = false;
+		}
+	}
+
+	function cancelPlanCheckout() {
+		if (policyProcessing) return;
+		policyOpen = false;
+		policyTarget = null;
+		policyChange = null;
+		policyError = null;
+		selectedPlanId = null;
+	}
+
+	async function confirmPlanCheckout() {
+		if (!policyTarget || !policyChange || policyProcessing) return;
+		const plan = policyTarget;
+		policyProcessing = true;
+		processingPayment = true;
+		policyError = null;
+		paymentError = null;
+
 		try {
 			const payment = await subscribePackageApi(plan.id);
+			policyOpen = false;
+			policyTarget = null;
+			policyChange = null;
 			await openPayment(payment);
 		} catch (error) {
-			paymentError =
+			policyError =
 				error instanceof Error ? error.message : 'Transaksi paket belum dapat dibuat.';
-			paymentNotice = null;
+			paymentError = policyError;
 		} finally {
+			policyProcessing = false;
 			processingPayment = false;
 		}
 	}
@@ -286,14 +412,18 @@
 
 	async function subscribeFree(plan: PublicBillingPlan) {
 		if (isSubscribing || plan.planId !== 'FREE_PLAN') return;
+		if (!subscriptionApplicable) {
+			subscribeError = true;
+			subscribeMessage = 'Paket gratis hanya tersedia untuk akun Job Seeker.';
+			return;
+		}
 		isSubscribing = true;
 		subscribeMessage = null;
 		subscribeError = false;
 		try {
 			await subscribePlanApi(plan.planId);
 			await initializeAuth();
-			await loadBenefits();
-			await loadPayments();
+			await Promise.all([loadBenefits(), loadPayments(), loadSubscription()]);
 			subscribeMessage = `Paket ${plan.name} berhasil diaktifkan.`;
 			await loadPlans();
 		} catch (error) {
@@ -316,10 +446,13 @@
 			return;
 		}
 		if (authenticated) {
+			subscriptionApplicable = getUserRole() === 'JOB_SEEKER';
 			void loadPayments();
-			if (getUserRole() === 'JOB_SEEKER') {
+			if (subscriptionApplicable) {
+				void loadSubscription();
 				await loadBenefits();
 			} else {
+				subscriptionLoading = false;
 				benefitsLoading = false;
 			}
 		}
@@ -428,6 +561,146 @@
 			</span>
 		</div>
 
+		{#if subscriptionApplicable}
+		<section id="langganan" class="mx-auto mt-6 max-w-5xl scroll-mt-8" aria-labelledby="subscription-title">
+			<div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+				<div class="flex flex-wrap items-start justify-between gap-3">
+					<div class="flex items-start gap-3">
+						<span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+							<Crown size={18} />
+						</span>
+						<div>
+							<p class="text-[10px] font-bold uppercase tracking-[0.14em] text-indigo-600">Langganan</p>
+							<h2 id="subscription-title" class="mt-0.5 text-lg font-bold tracking-tight text-slate-950">
+								Status langganan kamu
+							</h2>
+						</div>
+					</div>
+					<button
+						type="button"
+						onclick={() => void loadSubscription()}
+						disabled={subscriptionLoading}
+						class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-60"
+					>
+						{#if subscriptionLoading}<Spinner label="Memuat langganan" />{:else}<RefreshCw size={14} />{/if}
+						Refresh
+					</button>
+				</div>
+
+				{#if subscriptionLoading}
+					<div class="mt-5 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-xs text-slate-500">
+						Memuat status langganan...
+					</div>
+				{:else if subscriptionError}
+					<div class="mt-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-4 text-xs text-rose-700" role="alert">
+						{subscriptionError}
+					</div>
+				{:else if subscription && !subscriptionIsExpired(subscription)}
+					<div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+						<div class="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4">
+							<div class="flex items-center justify-between gap-2">
+								<p class="text-[10px] font-bold uppercase tracking-wide text-indigo-600">Paket aktif</p>
+								<span class="rounded-full px-2 py-0.5 text-[9px] font-bold ring-1 ring-inset {subscriptionStatusClass(subscription.status)}">
+									{subscriptionStatusText(subscription.status)}
+								</span>
+							</div>
+							<p class="mt-2 text-base font-bold text-slate-950">{subscription.package.name}</p>
+							<p class="mt-0.5 text-[10px] text-slate-500">
+								{tierLabel[subscription.package.tier]}
+								{#if subscription.package.priceIdr != null}
+									· {formatRupiah(subscription.package.priceIdr)}
+									{#if subscription.package.billingPeriod}
+										/{billingPeriodLabel(subscription.package.billingPeriod)}
+									{/if}
+								{/if}
+							</p>
+						</div>
+
+						<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+							<p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Berakhir pada</p>
+							<p class="mt-2 flex items-center gap-1.5 text-sm font-bold text-slate-900">
+								<CalendarDays size={15} class="text-slate-400" />
+								{subscription.endDate ? formatDateShort(subscription.endDate) : '—'}
+							</p>
+							<p class="mt-1 text-[10px] text-slate-500">{remainingDaysLabel(subscription)}</p>
+						</div>
+
+						<div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+							<p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Perubahan berikutnya</p>
+							{#if subscription.pendingPackage}
+								<p class="mt-2 flex items-center gap-1.5 text-sm font-bold text-amber-800">
+									<CalendarClock size={15} /> {subscription.pendingPackage.name}
+								</p>
+								<p class="mt-1 text-[10px] text-slate-500">
+									Aktif mulai
+									{subscription.pendingStartAt ? formatDateShort(subscription.pendingStartAt) : '—'}
+								</p>
+							{:else}
+								<p class="mt-2 text-sm font-bold text-slate-700">Tidak ada</p>
+								<p class="mt-1 text-[10px] text-slate-500">Paket aktif sampai tanggal berakhir.</p>
+							{/if}
+						</div>
+					</div>
+
+					{#if subscription.pendingPackage}
+						<div class="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">
+							<CalendarClock size={16} class="mt-0.5 shrink-0" />
+							<span>
+								Downgrade ke <strong>{subscription.pendingPackage.name}</strong> sudah dijadwalkan.
+								Paket <strong>{subscription.package.name}</strong> tetap aktif sampai
+								<strong>{subscription.endDate ? formatDateShort(subscription.endDate) : 'tanggal expired'}</strong>,
+								lalu paket baru aktif mulai
+								<strong>{subscription.pendingStartAt ? formatDateShort(subscription.pendingStartAt) : 'tanggal tersebut'}</strong>.
+							</span>
+						</div>
+					{/if}
+
+					<div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-slate-500">
+						<span class="inline-flex items-center gap-1">
+							<ShieldCheck size={13} class="text-emerald-600" /> Kredit tidak hangus saat perubahan paket
+						</span>
+						<span>Lifetime free tidak di-reset</span>
+					</div>
+				{:else if subscription}
+					<div class="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4">
+						<div class="flex flex-wrap items-center justify-between gap-2">
+							<div>
+								<p class="text-[10px] font-bold uppercase tracking-wide text-rose-700">Langganan berakhir</p>
+								<p class="mt-1 text-base font-bold text-slate-950">{subscription.package.name}</p>
+								<p class="mt-0.5 text-[10px] text-slate-500">
+									Berakhir {subscription.endDate ? formatDateShort(subscription.endDate) : '—'}
+								</p>
+							</div>
+							<span class="rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ring-inset {subscriptionStatusClass(subscription.status)}">
+								{subscriptionStatusText(subscription.status)}
+							</span>
+						</div>
+						<p class="mt-3 text-xs font-bold text-rose-900">Langganan Anda sudah berakhir.</p>
+						<ul class="mt-1.5 space-y-1 text-[11px] leading-5 text-rose-900">
+							<li>• Kuota dan benefit paket berbayar tidak dapat digunakan lagi.</li>
+							<li>• Akun kembali ke Free Plan.</li>
+							<li>• Kredit yang sudah dibeli tetap tersimpan.</li>
+							<li>• Lifetime free yang sudah terpakai tidak di-reset.</li>
+						</ul>
+					</div>
+				{:else}
+					<div class="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
+						<div>
+							<p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Paket saat ini</p>
+							<p class="mt-1 text-base font-bold text-slate-950">Free Plan</p>
+							<p class="mt-0.5 text-[10px] text-slate-500">
+								Belum ada paket berbayar aktif. Kamu tetap bisa menggunakan benefit gratis.
+							</p>
+						</div>
+						<span class="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-slate-600 ring-1 ring-inset ring-slate-200">
+							Gratis
+						</span>
+					</div>
+				{/if}
+			</div>
+		</section>
+		{/if}
+
 		<section id="paket" class="mt-10 scroll-mt-8" aria-labelledby="plans-title">
 			<div class="mb-5 flex items-end justify-between gap-4">
 				<div>
@@ -462,6 +735,7 @@
 				<div class="grid items-stretch gap-5 md:grid-cols-2 xl:grid-cols-4">
 					{#each plans as plan}
 						{@const isActive = isPlanActive(plan)}
+						{@const isPending = isPlanPending(plan)}
 						<article
 							class="relative flex flex-col rounded-2xl border bg-white p-5 shadow-sm transition sm:p-6 {plan.isPopular
 								? 'border-indigo-500 shadow-indigo-100/80 lg:-translate-y-2'
@@ -478,7 +752,18 @@
 							<div class="flex items-start justify-between gap-3">
 								<div class="min-w-0">
 									<p class="text-xs font-semibold text-indigo-600">{tierLabel[plan.tier]}</p>
-									<h3 class="mt-1 text-lg font-bold text-slate-950">{plan.name}</h3>
+									<div class="mt-1 flex flex-wrap items-center gap-2">
+										<h3 class="text-lg font-bold text-slate-950">{plan.name}</h3>
+										{#if isActive}
+											<span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-bold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+												Aktif
+											</span>
+										{:else if isPending}
+											<span class="rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-bold text-amber-700 ring-1 ring-inset ring-amber-200">
+												Dijadwalkan
+											</span>
+										{/if}
+									</div>
 								</div>
 								<span
 									class="flex size-10 shrink-0 items-center justify-center rounded-xl {plan.isPopular
@@ -544,13 +829,37 @@
 							</ul>
 
 							<div class="mt-auto pt-6">
-								{#if isActive}
+								{#if isActive && plan.planId === 'FREE_PLAN'}
 									<button
 										type="button"
 										disabled
 										class="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 text-sm font-semibold text-indigo-700"
 									>
 										<Check size={16} /> Paket aktif
+									</button>
+								{:else if isActive}
+									<button
+										type="button"
+										onclick={() => void preparePlanCheckout(plan)}
+										disabled={processingPayment || policyLoading || !midtransConfig?.configured}
+										class="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
+									>
+										{#if policyLoading && selectedPlanId === plan.id}
+											Memeriksa ketentuan...
+										{:else if processingPayment && selectedPlanId === plan.id}
+											Membuat pembayaran...
+										{:else}
+											<RefreshCw size={15} /> Perpanjang Paket
+										{/if}
+									</button>
+								{:else if isPending}
+									<button
+										type="button"
+										disabled
+										class="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-amber-800"
+									>
+										<CalendarClock size={15} />
+										Dijadwalkan {subscription?.pendingStartAt ? formatDateShort(subscription.pendingStartAt) : ''}
 									</button>
 								{:else}
 									<button
@@ -559,19 +868,25 @@
 											if (plan.planId === 'FREE_PLAN') {
 												void subscribeFree(plan);
 											} else {
-												void checkoutPackage(plan);
+												void preparePlanCheckout(plan);
 											}
 										}}
-										disabled={isSubscribing || processingPayment || !midtransConfig?.configured}
+										disabled={plan.planId === 'FREE_PLAN'
+											? isSubscribing || processingPayment || policyLoading
+											: isSubscribing || processingPayment || policyLoading || !midtransConfig?.configured}
 										class="flex h-11 w-full items-center justify-center gap-2 rounded-xl border text-sm font-semibold transition {plan.isPopular
 											? 'border-indigo-600 bg-indigo-600 text-white shadow-sm shadow-indigo-200 hover:bg-indigo-700'
 											: 'border-slate-200 bg-white text-slate-700 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700'} disabled:cursor-not-allowed disabled:opacity-60"
 									>
-										{processingPayment && plan.id === selectedPlanId
-											? 'Membuat pembayaran...'
-											: isSubscribing && plan.planId === 'FREE_PLAN'
-												? 'Mengaktifkan...'
-												: (plan.buttonLabel ?? 'Pilih Paket Ini')}
+										{#if policyLoading && plan.id === selectedPlanId}
+											Memeriksa ketentuan...
+										{:else if processingPayment && plan.id === selectedPlanId}
+											Membuat pembayaran...
+										{:else if isSubscribing && plan.planId === 'FREE_PLAN'}
+											Mengaktifkan...
+										{:else}
+											{plan.buttonLabel ?? 'Pilih Paket Ini'}
+										{/if}
 										<ArrowRight size={15} />
 									</button>
 								{/if}
@@ -924,8 +1239,18 @@
 		</footer>
 	</div>
 </main>
+
+<SubscriptionChangeModal
+	open={policyOpen}
+	targetPlan={policyTarget}
+	change={policyChange}
+	processing={policyProcessing}
+	error={policyError}
+	onclose={cancelPlanCheckout}
+	onconfirm={() => void confirmPlanCheckout()}
+/>
 {:else}
-	<main class="flex min-h-screen items-center justify-center bg-[#f8f8fc] px-4 text-slate-500">
+	<main class="flex min-h-screen items-center justify-center bg-[#f8f8fc] px-4 py-10 text-slate-500">
 		<p>Mengalihkan ke halaman login...</p>
 	</main>
 {/if}
