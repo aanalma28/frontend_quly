@@ -61,8 +61,8 @@ BACKEND_API_URL_PROD=https://api.example.com
 
 The frontend adds `/api` automatically when the configured URL does not already end with it.
 When `IS_PRODUCTION=false`, `BACKEND_API_URL_DEV` is used. When `IS_PRODUCTION=true`,
-`BACKEND_API_URL_PROD` is used. `PUBLIC_API_URL` is still supported as a fallback for older
-deployments.
+`BACKEND_API_URL_PROD` is used. If neither URL is configured, the local fallback is
+`http://localhost:3000/api`.
 
 The backend must allow requests from the frontend origin and redirect Google OAuth back to
 `/auth/callback` with an access token in the query string.
