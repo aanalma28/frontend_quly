@@ -1,6 +1,16 @@
-const API_BASE_URL = (import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000/api').replace(
-	/\/+$/,
-	''
+function normalizeApiBaseUrl(value: string | undefined): string {
+	const trimmed = value?.trim().replace(/\/+$/, '');
+	if (!trimmed) return 'http://localhost:3000/api';
+	return /\/api$/i.test(trimmed) ? trimmed : `${trimmed}/api`;
+}
+
+const productionFlag = import.meta.env.IS_PRODUCTION?.trim().toLowerCase();
+const isProduction = productionFlag ? productionFlag === 'true' : import.meta.env.PROD;
+const configuredApiUrl = isProduction
+	? import.meta.env.BACKEND_API_URL_PROD
+	: import.meta.env.BACKEND_API_URL_DEV;
+const API_BASE_URL = normalizeApiBaseUrl(
+	configuredApiUrl || import.meta.env.PUBLIC_API_URL
 );
 
 export const ACCESS_TOKEN_KEY = 'auth_access_token';

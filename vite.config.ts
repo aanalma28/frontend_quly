@@ -4,7 +4,7 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-	envPrefix: ['VITE_', 'PUBLIC_'],
+	envPrefix: ['VITE_', 'PUBLIC_', 'BACKEND_API_URL_', 'IS_PRODUCTION'],
 	plugins: [
 		tailwindcss(),
 		sveltekit({

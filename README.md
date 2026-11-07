@@ -51,8 +51,19 @@ cp .env.example .env
 npm run dev -- --open
 ```
 
-Set `PUBLIC_API_URL` in `.env` to the backend API base URL (for example,
-`http://localhost:3000/api`). The frontend uses this URL for authentication and API requests.
+Frontend API URL is selected from `.env` using `IS_PRODUCTION`:
+
+```env
+IS_PRODUCTION=false
+BACKEND_API_URL_DEV=http://localhost:3000
+BACKEND_API_URL_PROD=https://api.example.com
+```
+
+The frontend adds `/api` automatically when the configured URL does not already end with it.
+When `IS_PRODUCTION=false`, `BACKEND_API_URL_DEV` is used. When `IS_PRODUCTION=true`,
+`BACKEND_API_URL_PROD` is used. `PUBLIC_API_URL` is still supported as a fallback for older
+deployments.
+
 The backend must allow requests from the frontend origin and redirect Google OAuth back to
 `/auth/callback` with an access token in the query string.
 
