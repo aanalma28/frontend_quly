@@ -1,32 +1,51 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { ArrowRight, BriefcaseBusiness, Plus, Sparkles, WalletCards } from '@lucide/svelte';
-	import { auth, type AuthUser } from '#lib/stores/auth.js';
-	import { getMyBenefitsApi } from '#lib/services/billingApi.js';
-	import { formatNumber } from '#lib/utils/billing.js';
+	import { auth } from '#lib/stores/auth.js';
+	import { getMyBenefitsApi, type MyBenefitsResponse } from '#lib/services/billingApi.js';
+	import { formatNumber, isUnlimitedQuota } from '#lib/utils/billing.js';
 
-	function getQuotaPercent(user: AuthUser | null): number | null {
-		if (
-			typeof user?.monthlyQuota !== 'number' ||
-			user.monthlyQuota <= 0 ||
-			typeof user.remainingApplications !== 'number'
-		) {
-			return null;
-		}
-		return Math.min(100, Math.round((user.remainingApplications / user.monthlyQuota) * 100));
-	}
-
-	const quotaPercent = $derived(getQuotaPercent($auth.user));
-
+	let benefits = $state<MyBenefitsResponse | null>(null);
+	let benefitsLoading = $state(true);
 	let creditBalance = $state<number | null>(null);
+
+	const emailBenefit = $derived(
+		benefits?.benefits.find((benefit) => benefit.code === 'EMAIL_APPLICATION') ?? null
+	);
+	const quotaPercent = $derived.by(() => {
+		if (!emailBenefit) return null;
+		if (isUnlimitedQuota(emailBenefit.limit)) return 100;
+		if (emailBenefit.limit <= 0) return null;
+		const remaining = Math.max(emailBenefit.remaining, 0);
+		return Math.min(100, Math.round((remaining / emailBenefit.limit) * 100));
+	});
+	const quotaLabel = $derived.by(() => {
+		if (benefitsLoading) return 'Memeriksa kuota lamaran...';
+		if (!emailBenefit) return 'Informasi kuota belum tersedia';
+		if (isUnlimitedQuota(emailBenefit.limit)) return 'Email lamaran tanpa batas';
+		if (emailBenefit.limit <= 0) return 'Kuota email belum tersedia';
+		return `${formatNumber(Math.max(emailBenefit.remaining, 0))} / ${formatNumber(emailBenefit.limit)} lamaran tersisa`;
+	});
+	const quotaPercentLabel = $derived(
+		emailBenefit && isUnlimitedQuota(emailBenefit.limit)
+			? 'Tanpa batas'
+			: quotaPercent !== null
+				? `${quotaPercent}%`
+				: null
+	);
 
 	onMount(() => {
 		void getMyBenefitsApi()
 			.then((data) => {
+				benefits = data;
 				creditBalance = data.creditBalance;
 			})
 			.catch(() => {
+				benefits = null;
 				creditBalance = null;
+			})
+			.finally(() => {
+				benefitsLoading = false;
 			});
 	});
 </script>
@@ -83,28 +102,29 @@
 
 			<div class="mt-5 flex items-end justify-between gap-3">
 				<div>
-					<p class="text-sm font-semibold text-slate-800">
-						{#if typeof $auth.user?.remainingApplications === 'number' &&
-							typeof $auth.user.monthlyQuota === 'number'}
-							{$auth.user.remainingApplications} / {$auth.user.monthlyQuota} lamaran tersisa
+					<p class="text-sm font-semibold text-slate-800">{quotaLabel}</p>
+					<p class="mt-1 text-xs text-slate-500">
+						{#if emailBenefit}
+							Data kuota diambil dari benefit Email Lamaran di backend.
 						{:else}
-							Informasi kuota belum tersedia
+							Kuota Email Lamaran belum dapat dimuat.
 						{/if}
 					</p>
-					<p class="mt-1 text-xs text-slate-500">Pantau kuota dan lanjutkan langkah kariermu.</p>
 				</div>
-				{#if quotaPercent !== null}
-					<span class="text-xs font-semibold text-indigo-700">{quotaPercent}%</span>
+				{#if quotaPercentLabel}
+					<span class="text-xs font-semibold text-indigo-700">{quotaPercentLabel}</span>
 				{/if}
 			</div>
-			{#if quotaPercent !== null}
+			{#if quotaPercent !== null && emailBenefit}
 				<div
 					class="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"
 					role="progressbar"
-					aria-label="Sisa kuota lamaran bulanan"
+					aria-label="Sisa kuota email lamaran"
 					aria-valuemin={0}
-					aria-valuemax={$auth.user?.monthlyQuota ?? 0}
-					aria-valuenow={$auth.user?.remainingApplications ?? 0}
+					aria-valuemax={isUnlimitedQuota(emailBenefit.limit) ? 100 : emailBenefit.limit}
+					aria-valuenow={isUnlimitedQuota(emailBenefit.limit)
+						? 100
+						: Math.max(emailBenefit.remaining, 0)}
 				>
 					<div class="h-full rounded-full bg-indigo-500 transition-all" style:width="{quotaPercent}%"></div>
 				</div>
