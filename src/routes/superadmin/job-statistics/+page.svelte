@@ -38,14 +38,14 @@
 		RAW_PARSED: '#64748b',
 		PENDING_REVIEW: '#f59e0b',
 		APPROVED: '#14b8a6',
-		SAVED: '#6366f1',
+		SAVED: '#1b4db1',
 		PUBLISHED: '#10b981',
 		ARCHIVED: '#0ea5e9',
 		REJECTED: '#f43f5e'
 	};
 	const methodColors = {
-		EMAIL: '#6366f1',
-		WEBSITE_PORTAL: '#a855f7',
+		EMAIL: '#1b4db1',
+		WEBSITE_PORTAL: '#4d7dd3',
 		WHATSAPP: '#22d3ee',
 		TELEGRAM: '#f59e0b'
 	} as const;
@@ -349,7 +349,7 @@
 						<BarChart
 							labels={chartLabels}
 							values={chartValues}
-							color="#6366f1"
+							color="#1b4db1"
 							valueFormatter={(value) => formatNumber(value)}
 						/>
 					</div>

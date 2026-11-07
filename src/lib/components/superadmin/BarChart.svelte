@@ -10,7 +10,7 @@
 	let {
 		labels,
 		values,
-		color = '#6366f1',
+		color = '#1b4db1',
 		height = 220,
 		valueFormatter = (value: number) => String(value)
 	}: Props = $props();

@@ -20,7 +20,7 @@
 	<link rel="icon" href="/favicon-48.png?v=20261105-2" type="image/png" sizes="48x48" />
 	<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=20261105-2" />
 	<link rel="manifest" href="/site.webmanifest" />
-	<meta name="theme-color" content="#2e4fa3" />
+	<meta name="theme-color" content="#1b4db1" />
 	<title>Quly — AI Job Hunter</title>
 </svelte:head>
 

@@ -1041,7 +1041,7 @@
 			aria-labelledby="credits-title"
 		>
 			<div class="grid lg:grid-cols-[0.85fr_1.15fr]">
-				<div class="relative overflow-hidden bg-[#282343] p-6 text-white sm:p-8">
+				<div class="relative overflow-hidden bg-[#112f73] p-6 text-white sm:p-8">
 					<div
 						class="absolute -right-16 -top-20 size-56 rounded-full border border-white/10 shadow-[0_0_0_25px_rgba(255,255,255,0.025),0_0_0_55px_rgba(255,255,255,0.02)]"
 					></div>

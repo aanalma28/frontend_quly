@@ -32,7 +32,7 @@
 	let appliedFrom = $state('');
 	let appliedTo = $state('');
 
-	const palette = ['#6366f1', '#a855f7', '#22d3ee', '#f59e0b', '#f43f5e', '#10b981'];
+	const palette = ['#1b4db1', '#4d7dd3', '#22d3ee', '#f59e0b', '#f43f5e', '#10b981'];
 
 	const featureLabels: Record<string, string> = {
 		JOB_EXTRACTION: 'Job Extraction',
@@ -326,7 +326,7 @@
 						<BarChart
 							labels={featureLabelsList}
 							values={featureValues}
-							color="#6366f1"
+							color="#1b4db1"
 							valueFormatter={(value) => formatCompact(value)}
 						/>
 					</div>

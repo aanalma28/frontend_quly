@@ -1,7 +1,50 @@
 @import 'tailwindcss';
 
+@theme {
+	/* Quly brand palette — primary #1B4DB1 with the supplied darker shades. */
+	--color-indigo-50: #eef3fc;
+	--color-indigo-100: #dce7f8;
+	--color-indigo-200: #b9cef2;
+	--color-indigo-300: #8baee8;
+	--color-indigo-400: #4d7dd3;
+	--color-indigo-500: #1b4db1;
+	--color-indigo-600: #1b4db1;
+	--color-indigo-700: #1845a6;
+	--color-indigo-800: #153b8c;
+	--color-indigo-900: #112f73;
+	--color-indigo-950: #0b1f52;
+
+	--color-violet-50: #f0f4fd;
+	--color-violet-100: #e1eaf9;
+	--color-violet-200: #c3d6f3;
+	--color-violet-300: #94b4e9;
+	--color-violet-400: #5b87d6;
+	--color-violet-500: #1b4db1;
+	--color-violet-600: #153b8c;
+	--color-violet-700: #112f73;
+	--color-violet-800: #0d255c;
+	--color-violet-900: #0b1f52;
+	--color-violet-950: #071535;
+
+	--color-brand-50: #eef3fc;
+	--color-brand-100: #dce7f8;
+	--color-brand-200: #b9cef2;
+	--color-brand-300: #8baee8;
+	--color-brand-400: #4d7dd3;
+	--color-brand-500: #1b4db1;
+	--color-brand-600: #1b4db1;
+	--color-brand-700: #1845a6;
+	--color-brand-800: #153b8c;
+	--color-brand-900: #112f73;
+	--color-brand-950: #0b1f52;
+}
+
 :root {
 	color-scheme: dark;
+	--brand-primary: #1b4db1;
+	--brand-shade-1: #1845a6;
+	--brand-shade-2: #153b8c;
+	--brand-shade-3: #112f73;
 }
 
 html {
@@ -64,7 +107,7 @@ select option {
 }
 
 select option:checked {
-	background-color: #3730a3;
+	background-color: #1b4db1;
 	color: #ffffff;
 }
 

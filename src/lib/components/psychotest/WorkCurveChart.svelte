@@ -70,7 +70,7 @@
 		<polyline
 			points={linePoints}
 			fill="none"
-			stroke="#6366f1"
+			stroke="#1b4db1"
 			stroke-width="2.5"
 			stroke-linecap="round"
 			stroke-linejoin="round"
@@ -78,7 +78,7 @@
 	{/if}
 
 	{#each dots as dot}
-		<circle cx={dot.x} cy={dot.y} r="3.5" fill="#6366f1" />
+		<circle cx={dot.x} cy={dot.y} r="3.5" fill="#1b4db1" />
 	{/each}
 </svg>
 
