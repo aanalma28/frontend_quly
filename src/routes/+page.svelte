@@ -145,11 +145,22 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <svelte:head>
-	<title>Quly — Cari kerja, lebih terarah</title>
-	<meta
-		name="description"
-		content="Temukan peluang kerja yang relevan, kelola lamaran, dan persiapkan dirimu bersama Quly."
-	/>
+  {@html `<script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Quly",
+    "url": "https://quly.web.id",
+    "description": "Platform AI Job Hunter dan Otomasi Lamaran Kerja di Indonesia",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "All",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "IDR"
+    }
+  }
+  </script>`}
 </svelte:head>
 
 <div class="landing">
