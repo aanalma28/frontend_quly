@@ -17,8 +17,8 @@ export type SubscriptionTier =
 	| 'PRO_PLAN'
 	| 'UNLIMITED_PLAN';
 export type BillingStatus = 'ACTIVE' | 'EXPIRED' | 'CANCELLED' | 'FREE' | 'NO_SUBSCRIPTION';
-export type ApplicationStatus = 'PENDING' | 'SENT' | 'REPLIED' | 'FAILED';
-export type ApplicationChargeType = 'MONTHLY_QUOTA' | 'PAYG';
+export type ApplicationStatus = 'PENDING' | 'SENT' | 'READ' | 'REPLIED' | 'FAILED';
+export type ApplicationChargeType = 'MONTHLY_QUOTA' | 'PAYG' | 'UNCLASSIFIED';
 export type JobStatus =
 	| 'RAW_PARSED'
 	| 'PENDING_REVIEW'
@@ -237,10 +237,18 @@ export interface UserSubscriptionPackage {
 	aiTokenLimit: number;
 }
 
+export interface SubscriptionPendingPackage {
+	id: string;
+	name: string;
+	tier: PackageTier;
+}
+
 export interface UserSubscriptionSnapshot {
 	id: string;
 	status: SubStatus;
 	package: UserSubscriptionPackage;
+	pendingPackage?: SubscriptionPendingPackage | null;
+	pendingStartAt?: string | null;
 	startDate: string;
 	endDate: string;
 	remainingDays: number;
@@ -285,6 +293,24 @@ export interface UserQuotas {
 	testQuotaResetAt: string | null;
 }
 
+export interface SuperadminBenefitQuota {
+	code: string;
+	name: string;
+	description: string | null;
+	unit: string;
+	limit: number;
+	used: number;
+	remaining: number;
+	freeLifetimeLimit: number;
+	freeLifetimeUsed: number;
+	freeLifetimeRemaining: number;
+	resetAt: string | null;
+	creditCost: number;
+	creditPriceIdr: number;
+	overageCostIdr: number;
+	canUseWithCredit: boolean;
+}
+
 export interface UserCounts {
 	cvFiles: number;
 	userCvs: number;
@@ -302,6 +328,7 @@ export interface UserListItem {
 	subscription: UserSubscriptionSnapshot | null;
 	applications: UserApplicationMetrics;
 	quotas: UserQuotas;
+	benefitQuotas?: SuperadminBenefitQuota[];
 	counts: UserCounts;
 }
 
@@ -342,8 +369,11 @@ export interface UserStatsResponse {
 	};
 }
 
+export type ApplicationSource = 'LEGACY' | 'AUTO_APPLY';
+
 export interface RecentApplication {
 	id: string;
+	source?: ApplicationSource;
 	companyName: string;
 	jobTitle: string;
 	recipientEmail?: string | null;
@@ -375,6 +405,8 @@ export interface BillingSubscription {
 	id: string;
 	status: SubStatus;
 	package: BillingSubscriptionPackage;
+	pendingPackage?: SubscriptionPendingPackage | null;
+	pendingStartAt?: string | null;
 	startDate: string;
 	endDate: string;
 	remainingDays: number;
@@ -402,6 +434,7 @@ export interface BillingUserItem {
 	billingStatus: BillingStatus;
 	subscription: BillingSubscription | null;
 	quotas: UserQuotas;
+	benefitQuotas?: SuperadminBenefitQuota[];
 	applications: UserApplicationMetrics;
 	billing: BillingBreakdown;
 	account: BillingAccount;
@@ -412,8 +445,35 @@ export interface BillingUsersResponse {
 	meta: PaginationMeta;
 }
 
+export type SuperadminPaymentStatus =
+	| 'PENDING'
+	| 'PAID'
+	| 'FAILED'
+	| 'EXPIRED'
+	| 'CANCELLED'
+	| 'REFUNDED';
+
+export interface SuperadminPaymentSummaryItem {
+	id: string;
+	orderId: string;
+	type: 'SUBSCRIPTION' | 'CREDIT_TOPUP';
+	status: SuperadminPaymentStatus;
+	amountIdr: number;
+	credits: number | null;
+	paidAt: string | null;
+	createdAt: string;
+}
+
+export interface PaymentSummary {
+	totalPaidIdr: number;
+	lastPaidAt: string | null;
+	lastOrderId: string | null;
+	recentPayments: SuperadminPaymentSummaryItem[];
+}
+
 export interface BillingUserDetail extends BillingUserItem {
 	recentApplications: RecentApplication[];
+	paymentSummary?: PaymentSummary;
 }
 
 export interface BillingUsersQuery {
@@ -467,6 +527,7 @@ export interface BillingOverviewResponse {
 	};
 	quotas: {
 		monthlyApplicationsUsed: number;
+		legacyMonthlyApplicationsUsed?: number;
 		totalPaygBalance: number;
 		totalCreditBalance: number;
 	};
@@ -476,6 +537,14 @@ export interface BillingOverviewResponse {
 		byChargeType: ApplicationChargeCounts;
 		replyRate: number;
 		lastApplicationAt: string | null;
+	};
+	payments?: {
+		totalPaidIdr: number;
+		totalPendingIdr: number;
+		totalFailedIdr: number;
+		totalRefundedIdr: number;
+		lastPaidAt: string | null;
+		byStatus: Record<SuperadminPaymentStatus, number>;
 	};
 }
 
@@ -830,6 +899,7 @@ export interface ApplicationMethods {
 export interface ApplicationStatusCounts {
 	PENDING: number;
 	SENT: number;
+	READ: number;
 	REPLIED: number;
 	FAILED: number;
 }
@@ -837,6 +907,7 @@ export interface ApplicationStatusCounts {
 export interface ApplicationChargeCounts {
 	MONTHLY_QUOTA: number;
 	PAYG: number;
+	UNCLASSIFIED: number;
 }
 
 export interface JobStatisticsSource {

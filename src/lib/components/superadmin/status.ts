@@ -85,6 +85,7 @@ export const userRoleTone: Record<UserRole, string> = {
 export const applicationStatusLabel: Record<ApplicationStatus, string> = {
 	PENDING: 'Menunggu',
 	SENT: 'Terkirim',
+	READ: 'Dibaca',
 	REPLIED: 'Dibalas',
 	FAILED: 'Gagal'
 };
@@ -92,13 +93,15 @@ export const applicationStatusLabel: Record<ApplicationStatus, string> = {
 export const applicationStatusTone: Record<ApplicationStatus, string> = {
 	PENDING: 'bg-amber-500/10 text-amber-300 ring-amber-500/20',
 	SENT: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20',
+	READ: 'bg-sky-500/10 text-sky-300 ring-sky-500/20',
 	REPLIED: 'bg-cyan-500/10 text-cyan-300 ring-cyan-500/20',
 	FAILED: 'bg-rose-500/10 text-rose-300 ring-rose-500/20'
 };
 
 export const applicationChargeTypeLabel: Record<ApplicationChargeType, string> = {
 	MONTHLY_QUOTA: 'Kuota bulanan',
-	PAYG: 'PAYG'
+	PAYG: 'PAYG',
+	UNCLASSIFIED: 'Tidak terklasifikasi'
 };
 
 export const jobStatusLabel: Record<JobStatus, string> = {

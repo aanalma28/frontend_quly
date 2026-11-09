@@ -7,6 +7,7 @@ import type {
 interface QuotaUser {
 	tier: SubscriptionTier;
 	subscription: { package: { id: string; tier: PackageTier } } | null;
+	benefitQuotas?: Array<{ code: string; limit: number }>;
 	quotas: {
 		monthlyQuota: number;
 		monthlyUsed: number;
@@ -54,6 +55,9 @@ export function effectiveEmailQuota(
 		used: user.quotas.monthlyUsed,
 		remaining: user.quotas.monthlyRemaining
 	};
+	if (user.benefitQuotas?.some((benefit) => benefit.code === 'EMAIL_APPLICATION')) {
+		return base;
+	}
 	if (user.tier !== 'FREE_PLAN' || user.subscription) return base;
 
 	const plan = findPackage(user, packages);

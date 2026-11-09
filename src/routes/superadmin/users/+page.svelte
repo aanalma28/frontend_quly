@@ -51,6 +51,7 @@
 		type UserStatsResponse
 	} from '#lib/services/superadminApi.js';
 	import { effectiveEmailQuota } from '#lib/utils/superadminQuota.js';
+	import { isUnlimitedQuota } from '#lib/utils/billing.js';
 	import { auth } from '#lib/stores/auth.js';
 
 	const LIMIT = 12;
@@ -74,7 +75,7 @@
 		'PRO_PLAN',
 		'UNLIMITED_PLAN'
 	];
-	const applicationStatusOrder: ApplicationStatus[] = ['PENDING', 'SENT', 'REPLIED', 'FAILED'];
+	const applicationStatusOrder: ApplicationStatus[] = ['PENDING', 'SENT', 'READ', 'REPLIED', 'FAILED'];
 
 	const inputClass =
 		'w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/30';
@@ -115,6 +116,46 @@
 			minimumFractionDigits: 0,
 			maximumFractionDigits: 2
 		}).format(value)}%`;
+	}
+
+	function quotaValue(limit: number, remaining: number): string {
+		if (isUnlimitedQuota(limit)) return 'Tanpa batas';
+		return `${formatNumber(Math.max(remaining, 0))} / ${formatNumber(limit)}`;
+	}
+
+	function benefitQuotaValue(benefit: {
+		limit: number;
+		remaining: number;
+		freeLifetimeLimit: number;
+		freeLifetimeRemaining: number;
+	}): string {
+		if (benefit.limit <= 0 && benefit.freeLifetimeLimit > 0) {
+			return `Lifetime ${formatNumber(Math.max(benefit.freeLifetimeRemaining, 0))} / ${formatNumber(benefit.freeLifetimeLimit)}`;
+		}
+		return quotaValue(benefit.limit, benefit.remaining);
+	}
+
+	function benefitUsed(benefit: {
+		limit: number;
+		used: number;
+		freeLifetimeLimit: number;
+		freeLifetimeUsed: number;
+	}): number {
+		return benefit.limit <= 0 && benefit.freeLifetimeLimit > 0
+			? benefit.freeLifetimeUsed
+			: benefit.used;
+	}
+
+	function benefitLabel(code: string): string {
+		return code
+			.toLowerCase()
+			.split('_')
+			.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+			.join(' ');
+	}
+
+	function applicationSourceLabel(source?: string): string {
+		return source === 'AUTO_APPLY' ? 'Auto-Apply' : 'Legacy';
 	}
 
 	function userInitial(user: UserListItem | UserDetail): string {
@@ -342,7 +383,7 @@
 						</span>
 					</div>
 
-					<div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+					<div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
 						<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
 							<p class="text-[10px] uppercase tracking-wide text-slate-500">Total</p>
 							<p class="mt-1 text-lg font-bold text-white">
@@ -355,7 +396,7 @@
 									{applicationStatusLabel[status]}
 								</p>
 								<p class="mt-1 text-lg font-bold text-white">
-									{formatNumber(stats.applications.byStatus[status])}
+									{formatNumber(stats.applications.byStatus[status] ?? 0)}
 								</p>
 							</div>
 						{/each}
@@ -383,10 +424,14 @@
 
 					<div class="mt-3 flex flex-wrap gap-2 text-[11px]">
 						<span class="rounded-full border border-slate-700 px-2.5 py-1 text-slate-300">
-							Kuota bulanan: {formatNumber(stats.applications.byChargeType.MONTHLY_QUOTA)}
+							Kuota bulanan: {formatNumber(stats.applications.byChargeType.MONTHLY_QUOTA ?? 0)}
 						</span>
 						<span class="rounded-full border border-slate-700 px-2.5 py-1 text-slate-300">
-							PAYG: {formatNumber(stats.applications.byChargeType.PAYG)}
+							PAYG: {formatNumber(stats.applications.byChargeType.PAYG ?? 0)}
+						</span>
+						<span class="rounded-full border border-slate-700 px-2.5 py-1 text-slate-300">
+							Tidak terklasifikasi:
+							{formatNumber(stats.applications.byChargeType.UNCLASSIFIED ?? 0)}
 						</span>
 						<span class="rounded-full border border-slate-700 px-2.5 py-1 text-slate-500">
 							Terakhir: {formatDate(stats.applications.lastApplicationAt)}
@@ -597,6 +642,12 @@
 										{formatDateShort(user.subscription.endDate)} · {user.subscription.remainingDays}
 										hari
 									</p>
+									{#if user.subscription.pendingPackage}
+										<p class="mt-1 text-[10px] font-medium text-amber-300">
+											Downgrade ke {user.subscription.pendingPackage.name} mulai
+											{formatDateShort(user.subscription.pendingStartAt)}
+										</p>
+									{/if}
 								{:else}
 									<p class="mt-1 text-xs text-slate-400">Belum berlangganan</p>
 								{/if}
@@ -617,6 +668,22 @@
 							</div>
 						</div>
 
+						{#if user.benefitQuotas?.length}
+							<div class="mt-2 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+								<p class="text-[10px] uppercase tracking-wide text-slate-500">Benefit</p>
+								<div class="mt-1.5 flex flex-wrap gap-1.5">
+									{#each user.benefitQuotas as benefit}
+										<span
+											class="rounded-full border border-slate-700 px-2 py-0.5 text-[9px] text-slate-300"
+											title={benefit.name}
+										>
+											{benefitLabel(benefit.code)} {benefitQuotaValue(benefit)}
+										</span>
+									{/each}
+								</div>
+							</div>
+						{/if}
+
 						<div class="mt-2 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
 							<div class="flex flex-wrap items-center justify-between gap-2">
 								<p class="text-[10px] uppercase tracking-wide text-slate-500">Aplikasi</p>
@@ -628,13 +695,16 @@
 							<div class="mt-2 flex flex-wrap gap-1.5">
 								{#each applicationStatusOrder as status}
 									<span class="rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset {applicationStatusTone[status]}">
-										{applicationStatusLabel[status]}: {formatNumber(user.applications.byStatus[status])}
+										{applicationStatusLabel[status]}:
+										{formatNumber(user.applications.byStatus[status] ?? 0)}
 									</span>
 								{/each}
 							</div>
 							<p class="mt-2 text-[10px] text-slate-500">
-								Kuota bulanan {user.applications.byChargeType.MONTHLY_QUOTA} · PAYG
-								{user.applications.byChargeType.PAYG} · terakhir {formatDate(user.applications.lastApplicationAt)}
+								Kuota bulanan {formatNumber(user.applications.byChargeType.MONTHLY_QUOTA ?? 0)} ·
+								PAYG {formatNumber(user.applications.byChargeType.PAYG ?? 0)} · tidak
+								terklasifikasi {formatNumber(user.applications.byChargeType.UNCLASSIFIED ?? 0)} ·
+								terakhir {formatDate(user.applications.lastApplicationAt)}
 							</p>
 						</div>
 
@@ -804,6 +874,15 @@
 								<span class="text-slate-500">Sisa hari</span>
 								<span class="text-right font-medium text-slate-200">{detail.subscription.remainingDays} hari</span>
 							</div>
+							{#if detail.subscription.pendingPackage}
+								<div class="flex justify-between gap-3 rounded-lg bg-amber-500/10 px-2 py-1.5 text-amber-200">
+									<span>Downgrade terjadwal</span>
+									<span class="text-right font-medium">
+										{detail.subscription.pendingPackage.name} · mulai
+										{formatDateShort(detail.subscription.pendingStartAt)}
+									</span>
+								</div>
+							{/if}
 						</div>
 					{:else}
 						<p class="mt-3 text-xs text-slate-400">Belum memiliki subscription.</p>
@@ -862,10 +941,11 @@
 							<span class="font-medium text-cyan-300">{formatRate(detail.applications.replyRate)}</span>
 						</p>
 						<p class="flex justify-between gap-3">
-							<span class="text-slate-500">Kuota / PAYG</span>
+							<span class="text-slate-500">Kuota / PAYG / tidak terklasifikasi</span>
 							<span class="font-medium text-slate-200">
-								{formatNumber(detail.applications.byChargeType.MONTHLY_QUOTA)} /
-								{formatNumber(detail.applications.byChargeType.PAYG)}
+								{formatNumber(detail.applications.byChargeType.MONTHLY_QUOTA ?? 0)} /
+								{formatNumber(detail.applications.byChargeType.PAYG ?? 0)} /
+								{formatNumber(detail.applications.byChargeType.UNCLASSIFIED ?? 0)}
 							</span>
 						</p>
 						<p class="flex justify-between gap-3">
@@ -878,6 +958,31 @@
 					</div>
 				</div>
 			</div>
+
+			{#if detail.benefitQuotas?.length}
+				<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+					<h3 class="text-xs font-semibold uppercase tracking-wide text-slate-400">Kuota Benefit</h3>
+					<div class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+						{#each detail.benefitQuotas as benefit}
+							<div class="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
+								<p class="truncate text-[11px] font-semibold text-slate-200" title={benefit.name}>
+									{benefit.name}
+								</p>
+								<p class="mt-0.5 text-[10px] text-slate-500">
+									{benefitQuotaValue(benefit)} tersisa · terpakai
+									{formatNumber(benefitUsed(benefit))}
+								</p>
+								{#if benefit.limit > 0 && benefit.freeLifetimeLimit > 0}
+									<p class="mt-0.5 text-[10px] text-emerald-300">
+										Lifetime {formatNumber(benefit.freeLifetimeRemaining)} /
+										{formatNumber(benefit.freeLifetimeLimit)}
+									</p>
+								{/if}
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
 
 			<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
 				<h3 class="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -905,6 +1010,9 @@
 										</span>
 										<span class="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] text-slate-400">
 											{applicationChargeTypeLabel[application.chargeType]}
+										</span>
+										<span class="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] text-slate-500">
+											{applicationSourceLabel(application.source)}
 										</span>
 									</div>
 								</div>

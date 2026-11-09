@@ -58,9 +58,10 @@
 		type UserRole
 	} from '#lib/services/superadminApi.js';
 	import { effectiveEmailQuota } from '#lib/utils/superadminQuota.js';
+	import { isUnlimitedQuota } from '#lib/utils/billing.js';
 
 	const LIMIT = 12;
-	const applicationStatusOrder: ApplicationStatus[] = ['PENDING', 'SENT', 'REPLIED', 'FAILED'];
+	const applicationStatusOrder: ApplicationStatus[] = ['PENDING', 'SENT', 'READ', 'REPLIED', 'FAILED'];
 	const subscriptionStatuses: SubStatus[] = ['ACTIVE', 'EXPIRED', 'CANCELLED'];
 	const billingStatusOptions: Array<{ value: '' | BillingStatus; label: string }> = [
 		{ value: '', label: 'Semua billing status' },
@@ -142,6 +143,65 @@
 			minimumFractionDigits: 0,
 			maximumFractionDigits: 2
 		}).format(value)}%`;
+	}
+
+	function quotaValue(limit: number, remaining: number): string {
+		if (isUnlimitedQuota(limit)) return 'Tanpa batas';
+		return `${formatNumber(Math.max(remaining, 0))} / ${formatNumber(limit)}`;
+	}
+
+	function benefitQuotaValue(benefit: {
+		limit: number;
+		remaining: number;
+		freeLifetimeLimit: number;
+		freeLifetimeRemaining: number;
+	}): string {
+		if (benefit.limit <= 0 && benefit.freeLifetimeLimit > 0) {
+			return `Lifetime ${formatNumber(Math.max(benefit.freeLifetimeRemaining, 0))} / ${formatNumber(benefit.freeLifetimeLimit)}`;
+		}
+		return quotaValue(benefit.limit, benefit.remaining);
+	}
+
+	function benefitUsed(benefit: {
+		limit: number;
+		used: number;
+		freeLifetimeLimit: number;
+		freeLifetimeUsed: number;
+	}): number {
+		return benefit.limit <= 0 && benefit.freeLifetimeLimit > 0
+			? benefit.freeLifetimeUsed
+			: benefit.used;
+	}
+
+	function benefitLabel(code: string): string {
+		return code
+			.toLowerCase()
+			.split('_')
+			.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+			.join(' ');
+	}
+
+	function applicationSourceLabel(source?: string): string {
+		return source === 'AUTO_APPLY' ? 'Auto-Apply' : 'Legacy';
+	}
+
+	function paymentStatusLabel(status: string): string {
+		switch (status) {
+			case 'PAID':
+				return 'Berhasil';
+			case 'PENDING':
+				return 'Menunggu';
+			case 'FAILED':
+				return 'Gagal';
+			case 'EXPIRED':
+				return 'Kedaluwarsa';
+			case 'CANCELLED':
+				return 'Dibatalkan';
+			case 'REFUNDED':
+				return 'Dikembalikan';
+			default:
+				return status;
+		}
 	}
 
 	function userName(item: BillingUserItem | BillingUserDetail): string {
@@ -451,8 +511,8 @@
 
 	<div class="rounded-xl border border-sky-500/20 bg-sky-500/5 p-3 text-[11px] leading-5 text-sky-100/80">
 		Nilai billing adalah <strong class="text-white">estimasi</strong> dari subscription aktif dan
-		estimasi pemakaian PAYG. Backend belum memiliki riwayat pembayaran/invoice, jadi angka ini bukan
-		laporan pembayaran aktual.
+		estimasi pemakaian PAYG. Angka <strong class="text-white">Pembayaran Aktual</strong> diambil dari
+		riwayat transaksi backend, sehingga bisa berbeda dengan nilai estimasi.
 	</div>
 
 	{#if isLoading}
@@ -533,6 +593,39 @@
 			/>
 		</section>
 
+		{#if overview.payments}
+			<section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+				<KpiCard
+					label="Pembayaran Aktual"
+					value={formatRupiah(overview.payments.totalPaidIdr)}
+					hint={`${formatNumber(overview.payments.byStatus.PAID ?? 0)} pembayaran berhasil`}
+					icon={Receipt}
+					tone="emerald"
+				/>
+				<KpiCard
+					label="Pembayaran Menunggu"
+					value={formatRupiah(overview.payments.totalPendingIdr)}
+					hint={`${formatNumber(overview.payments.byStatus.PENDING ?? 0)} transaksi pending`}
+					icon={CalendarClock}
+					tone="amber"
+				/>
+				<KpiCard
+					label="Refund"
+					value={formatRupiah(overview.payments.totalRefundedIdr)}
+					hint={`${formatNumber(overview.payments.byStatus.REFUNDED ?? 0)} transaksi refund`}
+					icon={RefreshCw}
+					tone="rose"
+				/>
+				<KpiCard
+					label="Pembayaran Terakhir"
+					value={overview.payments.lastPaidAt ? formatDateShort(overview.payments.lastPaidAt) : '—'}
+					hint="Tanggal pembayaran PAID terakhir"
+					icon={CreditCard}
+					tone="cyan"
+				/>
+			</section>
+		{/if}
+
 		<section class="grid gap-4 lg:grid-cols-3">
 			<div class="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 lg:col-span-2">
 				<div class="flex flex-wrap items-start justify-between gap-3">
@@ -547,9 +640,9 @@
 					</span>
 				</div>
 
-				<div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+				<div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
 					{#each applicationStatusOrder as status}
-						{@const count = overview.applications.byStatus[status]}
+						{@const count = overview.applications.byStatus[status] ?? 0}
 						<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
 							<p class="text-[10px] uppercase tracking-wide text-slate-500">
 								{applicationStatusLabel[status]}
@@ -577,6 +670,9 @@
 						<p class="mt-1 text-lg font-bold text-white">
 							{formatNumber(overview.quotas.monthlyApplicationsUsed)}
 						</p>
+						<p class="mt-0.5 text-[10px] text-slate-500">
+							Legacy: {formatNumber(overview.quotas.legacyMonthlyApplicationsUsed ?? 0)}
+						</p>
 					</div>
 					<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-3">
 						<p class="text-[10px] uppercase tracking-wide text-slate-500">Total saldo PAYG</p>
@@ -594,10 +690,14 @@
 
 				<div class="mt-3 flex flex-wrap gap-2 text-[11px]">
 					<span class="rounded-full border border-slate-700 px-2.5 py-1 text-slate-300">
-						Kuota bulanan: {formatNumber(overview.applications.byChargeType.MONTHLY_QUOTA)}
+						Kuota bulanan: {formatNumber(overview.applications.byChargeType.MONTHLY_QUOTA ?? 0)}
 					</span>
 					<span class="rounded-full border border-slate-700 px-2.5 py-1 text-slate-300">
-						PAYG: {formatNumber(overview.applications.byChargeType.PAYG)}
+						PAYG: {formatNumber(overview.applications.byChargeType.PAYG ?? 0)}
+					</span>
+					<span class="rounded-full border border-slate-700 px-2.5 py-1 text-slate-300">
+						Tidak terklasifikasi:
+						{formatNumber(overview.applications.byChargeType.UNCLASSIFIED ?? 0)}
 					</span>
 					<span class="rounded-full border border-slate-700 px-2.5 py-1 text-slate-500">
 						Lamaran terakhir: {formatDate(overview.applications.lastApplicationAt)}
@@ -802,6 +902,12 @@
 										{formatDateShort(item.subscription.endDate)} · {item.subscription.remainingDays}
 										hari
 									</p>
+									{#if item.subscription.pendingPackage}
+										<p class="mt-1 text-[10px] font-medium text-amber-300">
+											Downgrade ke {item.subscription.pendingPackage.name} mulai
+											{formatDateShort(item.subscription.pendingStartAt)}
+										</p>
+									{/if}
 								{:else}
 									<p class="mt-1 text-xs text-slate-400">Belum berlangganan</p>
 								{/if}
@@ -829,6 +935,22 @@
 							</div>
 						</div>
 
+						{#if item.benefitQuotas?.length}
+							<div class="mt-2 rounded-xl border border-slate-800 bg-slate-950/40 p-3">
+								<p class="text-[10px] uppercase tracking-wide text-slate-500">Benefit</p>
+								<div class="mt-1.5 flex flex-wrap gap-1.5">
+									{#each item.benefitQuotas as benefit}
+										<span
+											class="rounded-full border border-slate-700 px-2 py-0.5 text-[9px] text-slate-300"
+											title={benefit.name}
+										>
+											{benefitLabel(benefit.code)} {benefitQuotaValue(benefit)}
+										</span>
+									{/each}
+								</div>
+							</div>
+						{/if}
+
 						<div class="mt-2 grid gap-2 sm:grid-cols-2">
 							<div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
 								<div class="flex items-center justify-between gap-2">
@@ -841,13 +963,15 @@
 								<div class="mt-1.5 flex flex-wrap gap-1">
 									{#each applicationStatusOrder as status}
 										<span class="rounded-full px-1.5 py-0.5 text-[9px] font-medium ring-1 ring-inset {applicationStatusTone[status]}">
-											{applicationStatusLabel[status]} {formatNumber(item.applications.byStatus[status])}
+											{applicationStatusLabel[status]}
+											{formatNumber(item.applications.byStatus[status] ?? 0)}
 										</span>
 									{/each}
 								</div>
 								<p class="mt-1 text-[10px] text-slate-500">
-									Kuota {formatNumber(item.applications.byChargeType.MONTHLY_QUOTA)} · PAYG
-									{formatNumber(item.applications.byChargeType.PAYG)}
+									Kuota {formatNumber(item.applications.byChargeType.MONTHLY_QUOTA ?? 0)} · PAYG
+									{formatNumber(item.applications.byChargeType.PAYG ?? 0)} · tidak
+									terklasifikasi {formatNumber(item.applications.byChargeType.UNCLASSIFIED ?? 0)}
 								</p>
 							</div>
 							<div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
@@ -986,6 +1110,15 @@
 								<span class="text-slate-500">Sisa hari</span>
 								<span class="text-right font-medium text-slate-200">{detail.subscription.remainingDays} hari</span>
 							</div>
+							{#if detail.subscription.pendingPackage}
+								<div class="flex justify-between gap-3 rounded-lg bg-amber-500/10 px-2 py-1.5 text-amber-200">
+									<span>Downgrade terjadwal</span>
+									<span class="text-right font-medium">
+										{detail.subscription.pendingPackage.name} · mulai
+										{formatDateShort(detail.subscription.pendingStartAt)}
+									</span>
+								</div>
+							{/if}
 						</div>
 					{:else}
 						<p class="mt-3 text-xs text-slate-400">Belum memiliki subscription.</p>
@@ -1025,6 +1158,31 @@
 				</div>
 			</div>
 
+			{#if detail.benefitQuotas?.length}
+				<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+					<h3 class="text-xs font-semibold uppercase tracking-wide text-slate-400">Kuota Benefit</h3>
+					<div class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+						{#each detail.benefitQuotas as benefit}
+							<div class="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
+								<p class="truncate text-[11px] font-semibold text-slate-200" title={benefit.name}>
+									{benefit.name}
+								</p>
+								<p class="mt-0.5 text-[10px] text-slate-500">
+									{benefitQuotaValue(benefit)} tersisa · terpakai
+									{formatNumber(benefitUsed(benefit))}
+								</p>
+								{#if benefit.limit > 0 && benefit.freeLifetimeLimit > 0}
+									<p class="mt-0.5 text-[10px] text-emerald-300">
+										Lifetime {formatNumber(benefit.freeLifetimeRemaining)} /
+										{formatNumber(benefit.freeLifetimeLimit)}
+									</p>
+								{/if}
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
+
 			<div class="grid gap-3 sm:grid-cols-2">
 				<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
 					<h3 class="text-xs font-semibold uppercase tracking-wide text-slate-400">Billing</h3>
@@ -1063,10 +1221,11 @@
 							<span class="font-medium text-cyan-300">{formatRate(detail.applications.replyRate)}</span>
 						</p>
 						<p class="flex justify-between gap-3">
-							<span class="text-slate-500">Kuota / PAYG</span>
+							<span class="text-slate-500">Kuota / PAYG / tidak terklasifikasi</span>
 							<span class="font-medium text-slate-200">
-								{formatNumber(detail.applications.byChargeType.MONTHLY_QUOTA)} /
-								{formatNumber(detail.applications.byChargeType.PAYG)}
+								{formatNumber(detail.applications.byChargeType.MONTHLY_QUOTA ?? 0)} /
+								{formatNumber(detail.applications.byChargeType.PAYG ?? 0)} /
+								{formatNumber(detail.applications.byChargeType.UNCLASSIFIED ?? 0)}
 							</span>
 						</p>
 						<p class="flex justify-between gap-3">
@@ -1076,6 +1235,48 @@
 					</div>
 				</div>
 			</div>
+
+			{#if detail.paymentSummary}
+				<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
+					<div class="flex flex-wrap items-center justify-between gap-2">
+						<h3 class="text-xs font-semibold uppercase tracking-wide text-slate-400">
+							Pembayaran
+						</h3>
+						<span class="text-sm font-bold text-emerald-300">
+							{formatRupiah(detail.paymentSummary.totalPaidIdr)}
+						</span>
+					</div>
+					<div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-500">
+						<span>Terakhir: {formatDate(detail.paymentSummary.lastPaidAt)}</span>
+						{#if detail.paymentSummary.lastOrderId}
+							<span>Order: {detail.paymentSummary.lastOrderId}</span>
+						{/if}
+					</div>
+					{#if detail.paymentSummary.recentPayments.length > 0}
+						<ul class="mt-3 divide-y divide-slate-800/70">
+							{#each detail.paymentSummary.recentPayments as payment (payment.id)}
+								<li class="flex flex-wrap items-center justify-between gap-2 py-2 first:pt-0 last:pb-0">
+									<div class="min-w-0">
+										<p class="truncate text-[11px] font-medium text-slate-200">{payment.orderId}</p>
+										<p class="mt-0.5 text-[10px] text-slate-500">
+											{payment.type === 'SUBSCRIPTION' ? 'Langganan' : 'Top-up kredit'} ·
+											{formatDate(payment.createdAt)}
+										</p>
+									</div>
+									<div class="flex shrink-0 items-center gap-2">
+										<span class="text-xs font-semibold text-slate-200">{formatRupiah(payment.amountIdr)}</span>
+										<span class="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] text-slate-400">
+											{paymentStatusLabel(payment.status)}
+										</span>
+									</div>
+								</li>
+							{/each}
+						</ul>
+					{:else}
+						<p class="mt-3 text-xs text-slate-500">Belum ada pembayaran.</p>
+					{/if}
+				</div>
+			{/if}
 
 			<div class="rounded-xl border border-slate-800 bg-slate-950/50 p-4">
 				<h3 class="text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -1102,6 +1303,9 @@
 										</span>
 										<span class="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] text-slate-400">
 											{applicationChargeTypeLabel[application.chargeType]}
+										</span>
+										<span class="rounded-full border border-slate-700 px-2 py-0.5 text-[10px] text-slate-500">
+											{applicationSourceLabel(application.source)}
 										</span>
 									</div>
 								</div>
