@@ -27,7 +27,7 @@
 		name: 'Quly',
 		url: 'https://quly.web.id',
 		description:
-			'Platform AI Job Hunter dan otomasi lamaran kerja di Indonesia untuk mencari lowongan, menyiapkan email lamaran, dan mengirim lamaran secara otomatis.',
+			'Platform AI Job Hunter dan otomasi lamaran kerja di Indonesia untuk cari lowongan, menyiapkan email lamaran, dan mengirim lamaran secara otomatis.',
 		applicationCategory: 'BusinessApplication',
 		operatingSystem: 'All',
 		inLanguage: 'id-ID',
