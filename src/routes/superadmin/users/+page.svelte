@@ -37,17 +37,20 @@
 	import {
 		getUserDetailApi,
 		getUserStatsApi,
+		listPackagesApi,
 		listUsersApi,
 		updateUserRoleApi,
 		type ApplicationStatus,
 		type PaginationMeta,
 		type SubStatus,
+		type SubscriptionPackage,
 		type SubscriptionTier,
 		type UserDetail,
 		type UserListItem,
 		type UserRole,
 		type UserStatsResponse
 	} from '#lib/services/superadminApi.js';
+	import { effectiveEmailQuota } from '#lib/utils/superadminQuota.js';
 	import { auth } from '#lib/stores/auth.js';
 
 	const LIMIT = 12;
@@ -79,6 +82,7 @@
 	let users = $state<UserListItem[]>([]);
 	let meta = $state<PaginationMeta | null>(null);
 	let stats = $state<UserStatsResponse | null>(null);
+	let packages = $state<SubscriptionPackage[]>([]);
 	let isLoading = $state(true);
 	let loadError = $state<string | null>(null);
 	let successMessage = $state<string | null>(null);
@@ -130,7 +134,7 @@
 		isLoading = true;
 		loadError = null;
 		try {
-			const [list, statsData] = await Promise.all([
+			const [list, statsData, packageList] = await Promise.all([
 				listUsersApi({
 					search: appliedSearch || undefined,
 					role: roleFilter || undefined,
@@ -143,11 +147,13 @@
 					page,
 					limit: LIMIT
 				}),
-				getUserStatsApi()
+				getUserStatsApi(),
+				listPackagesApi().catch(() => [] as SubscriptionPackage[])
 			]);
 			users = list.items;
 			meta = list.meta;
 			stats = statsData;
+			packages = packageList;
 		} catch (error) {
 			loadError = errorText(error, 'Data user belum dapat dimuat.');
 		} finally {
@@ -545,6 +551,7 @@
 
 			<div class="grid gap-4 xl:grid-cols-2">
 				{#each users as user (user.id)}
+					{@const quota = effectiveEmailQuota(user, packages)}
 					<article class="flex flex-col rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
 						<div class="flex items-start justify-between gap-3">
 							<div class="flex min-w-0 items-start gap-3">
@@ -597,11 +604,11 @@
 							<div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
 								<p class="text-[10px] uppercase tracking-wide text-slate-500">Kuota & PAYG</p>
 								<p class="mt-1 text-xs text-slate-200">
-									{formatNumber(user.quotas.monthlyRemaining)} / {formatNumber(user.quotas.monthlyQuota)}
+									{formatNumber(quota.remaining)} / {formatNumber(quota.limit)}
 									<span class="text-slate-500">lamaran tersisa</span>
 								</p>
 								<p class="mt-0.5 text-[10px] text-slate-500">
-									Terpakai {formatNumber(user.quotas.monthlyUsed)} · PAYG
+									Terpakai {formatNumber(quota.used)} · PAYG
 									{formatNumber(user.quotas.paygBalance)} · Kredit
 									{formatNumber(user.quotas.creditBalance)} · tes
 									{formatNumber(user.quotas.monthlyTestRemaining)} /
@@ -699,6 +706,7 @@
 			</button>
 		</div>
 	{:else if detail}
+		{@const detailQuota = effectiveEmailQuota(detail, packages)}
 		<div class="space-y-4">
 			<div class="flex flex-wrap items-center gap-1.5">
 				<span class="rounded-full px-2.5 py-1 text-[10px] font-semibold ring-1 ring-inset {userRoleTone[detail.role]}">
@@ -816,14 +824,15 @@
 						<p class="flex justify-between gap-3">
 							<span class="text-slate-500">Kuota bulanan</span>
 							<span class="font-medium text-slate-200">
-								{formatNumber(detail.quotas.monthlyUsed)} / {formatNumber(detail.quotas.monthlyQuota)}
-								({formatNumber(detail.quotas.monthlyRemaining)} sisa)
+								{formatNumber(detailQuota.remaining)} / {formatNumber(detailQuota.limit)} tersisa
+								({formatNumber(detailQuota.used)} terpakai)
 							</span>
 						</p>
 						<p class="flex justify-between gap-3">
 							<span class="text-slate-500">Kuota tes</span>
 							<span class="font-medium text-slate-200">
-								{formatNumber(detail.quotas.monthlyTestUsed)} / {formatNumber(detail.quotas.monthlyTestQuota)}
+								{formatNumber(detail.quotas.monthlyTestRemaining)} /
+								{formatNumber(detail.quotas.monthlyTestQuota)} tersisa
 							</span>
 						</p>
 						<p class="flex justify-between gap-3">

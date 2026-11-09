@@ -57,6 +57,7 @@
 		type UpdateUserQuotasInput,
 		type UserRole
 	} from '#lib/services/superadminApi.js';
+	import { effectiveEmailQuota } from '#lib/utils/superadminQuota.js';
 
 	const LIMIT = 12;
 	const applicationStatusOrder: ApplicationStatus[] = ['PENDING', 'SENT', 'REPLIED', 'FAILED'];
@@ -256,7 +257,7 @@
 	function openQuota(item: BillingUserItem | null) {
 		if (!item) return;
 		quotaTarget = item;
-		quotaMonthlyQuota = String(item.quotas.monthlyQuota);
+		quotaMonthlyQuota = String(effectiveEmailQuota(item, packages).limit);
 		quotaMonthlyUsed = String(item.quotas.monthlyUsed);
 		quotaTestQuota = String(item.quotas.monthlyTestQuota);
 		quotaTestUsed = String(item.quotas.monthlyTestUsed);
@@ -755,6 +756,7 @@
 
 			<div class="grid gap-4 xl:grid-cols-2">
 				{#each users as item (item.userId)}
+					{@const quota = effectiveEmailQuota(item, packages)}
 					<article class="flex flex-col rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
 						<div class="flex items-start justify-between gap-3">
 							<div class="flex min-w-0 items-start gap-3">
@@ -808,18 +810,17 @@
 								<div class="flex items-center justify-between gap-2 text-[10px] text-slate-500">
 									<span>Kuota bulanan</span>
 									<span>
-										{formatNumber(item.quotas.monthlyUsed)} /
-										{formatNumber(item.quotas.monthlyQuota)} terpakai
+										{formatNumber(quota.remaining)} / {formatNumber(quota.limit)} tersisa
 									</span>
 								</div>
 								<div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-800">
 									<div
 										class="h-full rounded-full bg-indigo-500"
-										style:width={`${quotaPercent(item.quotas.monthlyUsed, item.quotas.monthlyQuota)}%`}
+										style:width={`${quotaPercent(quota.remaining, quota.limit)}%`}
 									></div>
 								</div>
 								<p class="mt-1 text-[10px] text-slate-500">
-									Sisa {formatNumber(item.quotas.monthlyRemaining)} · PAYG
+									Terpakai {formatNumber(quota.used)} · PAYG
 									{formatNumber(item.quotas.paygBalance)} · Kredit
 									{formatNumber(item.quotas.creditBalance)} · tes
 									{formatNumber(item.quotas.monthlyTestRemaining)} /
@@ -933,6 +934,7 @@
 			</button>
 		</div>
 	{:else if detail}
+		{@const detailQuota = effectiveEmailQuota(detail, packages)}
 		<div class="space-y-4">
 			<div class="flex flex-wrap items-center gap-1.5">
 				<span class="rounded-full px-2.5 py-1 text-[10px] font-semibold ring-1 ring-inset {userRoleTone[detail.role]}">
@@ -996,14 +998,15 @@
 						<p class="flex justify-between gap-3">
 							<span class="text-slate-500">Kuota bulanan</span>
 							<span class="font-medium text-slate-200">
-								{formatNumber(detail.quotas.monthlyUsed)} / {formatNumber(detail.quotas.monthlyQuota)}
-								({formatNumber(detail.quotas.monthlyRemaining)} sisa)
+								{formatNumber(detailQuota.remaining)} / {formatNumber(detailQuota.limit)} tersisa
+								({formatNumber(detailQuota.used)} terpakai)
 							</span>
 						</p>
 						<p class="flex justify-between gap-3">
 							<span class="text-slate-500">Kuota tes</span>
 							<span class="font-medium text-slate-200">
-								{formatNumber(detail.quotas.monthlyTestUsed)} / {formatNumber(detail.quotas.monthlyTestQuota)}
+								{formatNumber(detail.quotas.monthlyTestRemaining)} /
+								{formatNumber(detail.quotas.monthlyTestQuota)} tersisa
 							</span>
 						</p>
 						<p class="flex justify-between gap-3">
