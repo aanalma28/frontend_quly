@@ -22,6 +22,7 @@
 	import { loadProfile, onboarding, step1Complete } from '#lib/stores/onboardingStore.js';
 	import RequirementsStepsCard from '#lib/components/ui/RequirementsStepsCard.svelte';
 	import QulyLogo from '#lib/components/ui/QulyLogo.svelte';
+	import LogoutConfirmModal from '#lib/components/auth/LogoutConfirmModal.svelte';
 	import { goto } from '$app/navigation';
 	import type { LayoutProps } from './$types';
 
@@ -29,6 +30,8 @@
 
 	let isAdmin = $state(false);
 	let creditBalance = $state<number | null>(null);
+	let logoutOpen = $state(false);
+	let loggingOut = $state(false);
 
 	const navigation = [
 		{ label: 'Ringkasan', href: '/dashboard', icon: LayoutDashboard },
@@ -50,6 +53,26 @@
 		const authenticated = await initializeAuth();
 		if (!authenticated && !get(auth).error) {
 			await goto('/auth/login?redirectTo=%2Fdashboard');
+		}
+	}
+
+	function openLogoutConfirm() {
+		logoutOpen = true;
+	}
+
+	function closeLogoutConfirm() {
+		if (loggingOut) return;
+		logoutOpen = false;
+	}
+
+	async function confirmLogout() {
+		if (loggingOut) return;
+		loggingOut = true;
+		try {
+			await logout();
+		} finally {
+			loggingOut = false;
+			logoutOpen = false;
 		}
 	}
 
@@ -120,7 +143,7 @@
 			</button>
 			<button
 				type="button"
-				onclick={logout}
+				onclick={openLogoutConfirm}
 				class="ml-2 mt-5 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700"
 			>
 				Masuk ulang
@@ -164,16 +187,16 @@
 			{/each}
 		</nav>
 
-		<div class="mt-6 hidden rounded-2xl bg-slate-950 p-4 text-white md:mt-auto md:block">
+		<div class="mt-4 rounded-2xl bg-slate-950 p-4 text-white md:mt-auto">
 			<div class="mb-3 flex size-9 items-center justify-center rounded-xl bg-white/10 text-indigo-200">
 				<CircleHelp size={18} />
 			</div>
 			<p class="text-sm font-semibold">Butuh bantuan?</p>
 			<p class="mt-1 text-xs leading-5 text-slate-300">
-				Lanjutkan mengelola lamaranmu dan pantau progres di ruang kerja ini.
+				Temukan jawaban umum atau hubungi tim Quly untuk kendala akun, paket, dan proses lamaran.
 			</p>
-			<a href="/dashboard/auto-apply" class="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-indigo-200">
-				Lihat lamaran <ArrowUpRight size={13} />
+			<a href="/support" class="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-indigo-200">
+				Buka pusat bantuan <ArrowUpRight size={13} />
 			</a>
 		</div>
 	</aside>
@@ -196,8 +219,16 @@
 				</a>
 				<button
 					type="button"
-					onclick={logout}
-					class="flex items-center gap-2 rounded-full p-1.5 pr-2 text-slate-600 transition hover:bg-slate-50 hover:text-indigo-700"
+					onclick={openLogoutConfirm}
+					class="flex size-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700 sm:hidden"
+					aria-label="Keluar dari akun"
+				>
+					<LogOut size={16} />
+				</button>
+				<button
+					type="button"
+					onclick={openLogoutConfirm}
+					class="hidden items-center gap-2 rounded-full p-1.5 pr-2 text-slate-600 transition hover:bg-slate-50 hover:text-indigo-700 sm:flex"
 					aria-label="Keluar dari akun"
 				>
 					<span class="flex size-8 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
@@ -208,11 +239,11 @@
 							.join('')
 							.toUpperCase()}
 					</span>
-					<span class="hidden text-left sm:block">
+					<span class="block text-left">
 						<span class="block max-w-36 truncate text-xs font-semibold leading-4">{$auth.user.fullName}</span>
 						<span class="block max-w-36 truncate text-[11px] text-slate-500">{$auth.user.email}</span>
 					</span>
-					<LogOut size={14} class="hidden sm:block" />
+					<LogOut size={14} />
 				</button>
 			</div>
 		</header>
@@ -270,4 +301,11 @@
 		</main>
 	</div>
 	{/if}
+
+	<LogoutConfirmModal
+		open={logoutOpen}
+		loading={loggingOut}
+		onconfirm={() => void confirmLogout()}
+		oncancel={closeLogoutConfirm}
+	/>
 </div>

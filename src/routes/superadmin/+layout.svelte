@@ -19,12 +19,35 @@
 	} from '@lucide/svelte';
 	import { auth, getUserRole, initializeAuth, logout } from '#lib/stores/auth.js';
 	import QulyLogo from '#lib/components/ui/QulyLogo.svelte';
+	import LogoutConfirmModal from '#lib/components/auth/LogoutConfirmModal.svelte';
 	import type { Component } from 'svelte';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
 
 	let checking = $state(true);
+	let logoutOpen = $state(false);
+	let loggingOut = $state(false);
+
+	function openLogoutConfirm() {
+		logoutOpen = true;
+	}
+
+	function closeLogoutConfirm() {
+		if (loggingOut) return;
+		logoutOpen = false;
+	}
+
+	async function confirmLogout() {
+		if (loggingOut) return;
+		loggingOut = true;
+		try {
+			await logout();
+		} finally {
+			loggingOut = false;
+			logoutOpen = false;
+		}
+	}
 
 	interface NavItem {
 		label: string;
@@ -153,7 +176,7 @@
 			<div class="mt-6 hidden space-y-2 md:mt-auto md:block">
 				<button
 					type="button"
-					onclick={logout}
+					onclick={openLogoutConfirm}
 					class="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-slate-400 transition hover:bg-white/5 hover:text-white"
 				>
 					<LogOut size={16} /> Keluar
@@ -178,6 +201,14 @@
 					<span class="flex size-8 items-center justify-center rounded-full bg-amber-500/15 text-xs font-bold text-amber-300">
 						{($auth.user?.fullName ?? $auth.user?.email ?? 'S').slice(0, 1).toUpperCase()}
 					</span>
+					<button
+						type="button"
+						onclick={openLogoutConfirm}
+						class="inline-flex size-9 items-center justify-center rounded-lg border border-slate-700 text-slate-300 transition hover:border-rose-500/40 hover:bg-rose-500/10 hover:text-rose-300 md:hidden"
+						aria-label="Keluar dari akun"
+					>
+						<LogOut size={16} />
+					</button>
 				</div>
 			</header>
 
@@ -187,3 +218,10 @@
 		</div>
 	</div>
 {/if}
+
+<LogoutConfirmModal
+	open={logoutOpen}
+	loading={loggingOut}
+	onconfirm={() => void confirmLogout()}
+	oncancel={closeLogoutConfirm}
+/>

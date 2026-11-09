@@ -1,12 +1,36 @@
 <script lang="ts">
 	import { ArrowRight, Menu, X } from '@lucide/svelte';
 	import QulyLogo from '#lib/components/ui/QulyLogo.svelte';
+	import LogoutConfirmModal from '#lib/components/auth/LogoutConfirmModal.svelte';
 	import { auth, logout } from '#lib/stores/auth.js';
 
 	let menuOpen = $state(false);
+	let logoutOpen = $state(false);
+	let loggingOut = $state(false);
 
 	function closeMenu() {
 		menuOpen = false;
+	}
+
+	function openLogoutConfirm() {
+		menuOpen = false;
+		logoutOpen = true;
+	}
+
+	function closeLogoutConfirm() {
+		if (loggingOut) return;
+		logoutOpen = false;
+	}
+
+	async function confirmLogout() {
+		if (loggingOut) return;
+		loggingOut = true;
+		try {
+			await logout();
+		} finally {
+			loggingOut = false;
+			logoutOpen = false;
+		}
 	}
 </script>
 
@@ -35,7 +59,7 @@
 					href="/auth/login"
 					onclick={(event) => {
 						event.preventDefault();
-						void logout();
+						openLogoutConfirm();
 					}}>Keluar</a
 				>
 				<a class="button button-small" href="/dashboard">
@@ -77,3 +101,10 @@
 		</nav>
 	{/if}
 </header>
+
+<LogoutConfirmModal
+	open={logoutOpen}
+	loading={loggingOut}
+	onconfirm={() => void confirmLogout()}
+	oncancel={closeLogoutConfirm}
+/>

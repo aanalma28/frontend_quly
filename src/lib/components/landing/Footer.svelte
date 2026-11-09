@@ -10,6 +10,7 @@
 	<div class="footer-links">
 		<a href="#fitur">Fitur</a>
 		<a href="#harga">Harga</a>
+		<a href="/support">Bantuan</a>
 		<a href="/privacy">Kebijakan Privasi</a>
 		<a href="/terms">Syarat &amp; Ketentuan</a>
 		<a href="/auth/login">Masuk</a>
