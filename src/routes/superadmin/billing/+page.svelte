@@ -807,7 +807,10 @@
 							<div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
 								<div class="flex items-center justify-between gap-2 text-[10px] text-slate-500">
 									<span>Kuota bulanan</span>
-									<span>{formatNumber(item.quotas.monthlyUsed)} / {formatNumber(item.quotas.monthlyQuota)}</span>
+									<span>
+										{formatNumber(item.quotas.monthlyUsed)} /
+										{formatNumber(item.quotas.monthlyQuota)} terpakai
+									</span>
 								</div>
 								<div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-800">
 									<div
@@ -816,9 +819,11 @@
 									></div>
 								</div>
 								<p class="mt-1 text-[10px] text-slate-500">
-									PAYG {formatNumber(item.quotas.paygBalance)} · Kredit
+									Sisa {formatNumber(item.quotas.monthlyRemaining)} · PAYG
+									{formatNumber(item.quotas.paygBalance)} · Kredit
 									{formatNumber(item.quotas.creditBalance)} · tes
-									{formatNumber(item.quotas.monthlyTestUsed)} / {formatNumber(item.quotas.monthlyTestQuota)}
+									{formatNumber(item.quotas.monthlyTestRemaining)} /
+									{formatNumber(item.quotas.monthlyTestQuota)} tersisa
 								</p>
 							</div>
 						</div>

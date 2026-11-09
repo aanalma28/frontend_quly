@@ -597,13 +597,15 @@
 							<div class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">
 								<p class="text-[10px] uppercase tracking-wide text-slate-500">Kuota & PAYG</p>
 								<p class="mt-1 text-xs text-slate-200">
-									{formatNumber(user.quotas.monthlyUsed)} / {formatNumber(user.quotas.monthlyQuota)}
-									<span class="text-slate-500">kuota bulanan</span>
+									{formatNumber(user.quotas.monthlyRemaining)} / {formatNumber(user.quotas.monthlyQuota)}
+									<span class="text-slate-500">lamaran tersisa</span>
 								</p>
 								<p class="mt-0.5 text-[10px] text-slate-500">
-									PAYG {formatNumber(user.quotas.paygBalance)} · Kredit
+									Terpakai {formatNumber(user.quotas.monthlyUsed)} · PAYG
+									{formatNumber(user.quotas.paygBalance)} · Kredit
 									{formatNumber(user.quotas.creditBalance)} · tes
-									{formatNumber(user.quotas.monthlyTestUsed)} / {formatNumber(user.quotas.monthlyTestQuota)}
+									{formatNumber(user.quotas.monthlyTestRemaining)} /
+									{formatNumber(user.quotas.monthlyTestQuota)} tersisa
 								</p>
 							</div>
 						</div>
