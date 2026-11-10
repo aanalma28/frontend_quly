@@ -75,13 +75,18 @@
 	const isScrapeRunning = $derived(scrapeRun?.status === 'RUNNING');
 	const isScrapeStopping = $derived(scrapeRun?.status === 'STOPPING');
 	const isScrapeActive = $derived(isScrapeRunning || isScrapeStopping);
+	const activeRunMode = $derived(scrapeRun?.mode ?? selectedMode);
 	const canStopScraper = $derived(
 		!isLoading &&
 			!isToggling &&
+			!isScrapeActive &&
 			!isStartingRun &&
 			!isStoppingRun &&
-			!isScrapeStopping &&
-			(isEnabled || isScrapeRunning || Boolean(status?.isConnecting))
+			isEnabled &&
+			!status?.isDisconnecting
+	);
+	const canStopRun = $derived(
+		isScrapeRunning && !isStoppingRun && !isScrapeStopping
 	);
 	const maxMessages = $derived.by(() => {
 		const raw = String(maxMessagesInput ?? '').trim();
@@ -100,11 +105,22 @@
 	const canStartRun = $derived(
 		Boolean(configReady) &&
 			telegramSources.length > 0 &&
+			!isLoading &&
+			!isEnabled &&
+			!isToggling &&
 			!isScrapeActive &&
 			!isStartingRun &&
 			!isStoppingRun &&
 			!status?.isConnecting &&
 			!status?.isDisconnecting
+	);
+	const scrapeButtonDisabled = $derived(isScrapeActive ? !canStopRun : !canStartRun);
+	const scrapeButtonLabel = $derived(
+		isScrapeStopping || isStoppingRun
+			? 'Menghentikan...'
+			: isScrapeRunning
+				? `Stop Scrape ${activeRunMode}`
+				: `Mulai Scrape ${selectedMode}`
 	);
 	const modeNote = $derived(
 		selectedMode === 'CURSOR'
@@ -176,25 +192,33 @@
 
 	async function stopScraper() {
 		if (!canStopScraper) return;
+		await toggle('STOP');
+	}
+
+	async function stopScrapeRun() {
+		if (!canStopRun) return;
 		isStoppingRun = true;
-		error = null;
+		runError = null;
 		try {
-			if (isScrapeRunning) {
-				runError = null;
-				status = await stopTelegramScraperRunApi();
-				scheduleStatusPoll();
-				onchanged?.();
-			} else {
-				await toggle('STOP');
-			}
+			status = await stopTelegramScraperRunApi();
+			scheduleStatusPoll();
+			onchanged?.();
 		} catch (stopError) {
 			runError =
 				stopError instanceof Error
 					? stopError.message
-					: 'Scraper belum dapat dihentikan.';
+					: 'Scrape Telegram belum dapat dihentikan.';
 		} finally {
 			isStoppingRun = false;
 		}
+	}
+
+	async function handleScrapeButton() {
+		if (isScrapeActive) {
+			await stopScrapeRun();
+			return;
+		}
+		await startScrapeRun(selectedMode);
 	}
 
 	$effect(() => {
@@ -342,15 +366,15 @@
 				type="button"
 				onclick={() => void stopScraper()}
 				disabled={!canStopScraper}
-				title={isScrapeRunning ? 'Hentikan scrape massal yang sedang berjalan' : 'Matikan listener Telegram'}
+				title="Matikan listener Telegram"
 				class="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-rose-500 px-4 text-sm font-semibold text-white transition hover:bg-rose-400 disabled:cursor-not-allowed disabled:opacity-40"
 			>
-				{#if isToggling || isStoppingRun || isScrapeStopping}
+				{#if isToggling}
 					<Spinner label="Menghentikan scraper" />
 				{:else}
 					<Square size={14} />
 				{/if}
-				{isScrapeStopping ? 'Menghentikan...' : 'Stop Scraper'}
+				Stop Scraper
 			</button>
 			<button
 				type="button"
@@ -424,7 +448,7 @@
 					type="button"
 					aria-pressed={selectedMode === 'CURSOR'}
 					onclick={() => (selectedMode = 'CURSOR')}
-					disabled={isScrapeActive || isStartingRun || isStoppingRun}
+					disabled={isEnabled || isScrapeActive || isStartingRun || isStoppingRun || isToggling}
 					class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition {selectedMode ===
 					'CURSOR'
 						? 'bg-indigo-500 text-white'
@@ -436,7 +460,7 @@
 					type="button"
 					aria-pressed={selectedMode === 'TODAY'}
 					onclick={() => (selectedMode = 'TODAY')}
-					disabled={isScrapeActive || isStartingRun || isStoppingRun}
+					disabled={isEnabled || isScrapeActive || isStartingRun || isStoppingRun || isToggling}
 					class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition {selectedMode ===
 					'TODAY'
 						? 'bg-indigo-500 text-white'
@@ -529,18 +553,31 @@
 				<div class="mt-4">
 					<button
 						type="button"
-						onclick={() => void startScrapeRun(selectedMode)}
-						disabled={!canStartRun}
-						class="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-indigo-500 px-3 text-xs font-semibold text-white transition hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-40"
+						onclick={() => void handleScrapeButton()}
+						disabled={scrapeButtonDisabled}
+						title={isScrapeActive
+							? isScrapeStopping || isStoppingRun
+								? 'Sedang menghentikan scrape'
+								: `Hentikan scrape ${activeRunMode}`
+							: isEnabled
+								? 'Stop listener terlebih dahulu sebelum menjalankan scrape'
+								: `Mulai scrape ${selectedMode}`}
+						class="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg px-3 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40 {isScrapeActive
+							? 'bg-rose-500 hover:bg-rose-400'
+							: 'bg-indigo-500 hover:bg-indigo-400'}"
 					>
-						{#if isStartingRun}
-							<Spinner label={`Memulai scrape ${selectedMode}`} />
+						{#if isStartingRun || isStoppingRun || isScrapeStopping}
+							<Spinner
+								label={isStartingRun ? `Memulai scrape ${selectedMode}` : 'Menghentikan scrape'}
+							/>
+						{:else if isScrapeRunning}
+							<Square size={14} />
 						{:else if selectedMode === 'CURSOR'}
 							<History size={14} />
 						{:else}
 							<CalendarClock size={14} />
 						{/if}
-						Mulai Scrape {selectedMode}
+						{scrapeButtonLabel}
 					</button>
 				</div>
 
@@ -549,10 +586,10 @@
 						{runError}
 					</p>
 				{/if}
-				{#if isScrapeRunning || isScrapeStopping}
-					<p class="mt-3 inline-flex items-center gap-1.5 text-[11px] font-medium {isScrapeStopping ? 'text-amber-300' : 'text-sky-300'}">
-						<Spinner label={isScrapeStopping ? 'Menghentikan scrape' : 'Scrape sedang berjalan'} />
-						{isScrapeStopping ? 'Menghentikan scrape...' : 'Scrape sedang berjalan...'}
+				{#if isScrapeActive || isStoppingRun}
+					<p class="mt-3 inline-flex items-center gap-1.5 text-[11px] font-medium {isScrapeStopping || isStoppingRun ? 'text-amber-300' : 'text-sky-300'}">
+						<Spinner label={isScrapeStopping || isStoppingRun ? 'Menghentikan scrape' : 'Scrape sedang berjalan'} />
+						{isScrapeStopping || isStoppingRun ? 'Menghentikan scrape...' : 'Scrape sedang berjalan...'}
 					</p>
 				{/if}
 			</div>

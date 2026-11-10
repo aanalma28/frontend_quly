@@ -187,7 +187,7 @@
 			{/each}
 		</nav>
 
-		<div class="mt-4 rounded-2xl bg-slate-950 p-4 text-white md:mt-auto">
+		<div class="mt-4 hidden rounded-2xl bg-slate-950 p-4 text-white md:mt-auto md:block">
 			<div class="mb-3 flex size-9 items-center justify-center rounded-xl bg-white/10 text-indigo-200">
 				<CircleHelp size={18} />
 			</div>
@@ -200,6 +200,15 @@
 			</a>
 		</div>
 	</aside>
+
+	<a
+		href="/support"
+		aria-label="Buka pusat bantuan"
+		class="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-30 inline-flex h-10 items-center gap-1.5 rounded-full border border-white/10 bg-slate-950/95 px-3.5 text-[11px] font-semibold text-white shadow-lg shadow-slate-950/25 backdrop-blur transition hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#f7f8fc] active:scale-95 md:hidden"
+	>
+		<CircleHelp size={15} class="text-indigo-200" />
+		Bantuan
+	</a>
 
 	<div class="min-h-screen md:pl-64">
 		<header
@@ -248,7 +257,7 @@
 			</div>
 		</header>
 
-		<main class="mx-auto max-w-[1440px] px-5 py-7 sm:px-8 sm:py-9">
+		<main class="mx-auto max-w-[1440px] px-5 pb-24 pt-7 sm:px-8 sm:pt-9 md:pb-9">
 			{#if page.url.pathname === '/dashboard' || page.url.pathname === '/dashboard/onboarding' || page.url.pathname === '/dashboard/integrations'}
 				{@render children()}
 			{:else if $onboarding.isLoadingProfile}
