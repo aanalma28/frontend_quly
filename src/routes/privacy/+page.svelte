@@ -7,7 +7,7 @@
 	title="Kebijakan Privasi"
 	eyebrow="Privacy Policy"
 	description="Quly menghargai privasi kamu. Halaman ini menjelaskan data apa yang kami kumpulkan, bagaimana data digunakan, dan hak-hak yang kamu miliki."
-	updated="5 November 2026"
+	updated="11 November 2026"
 	active="privacy"
 >
 	<section class="border-b border-slate-100 py-7 first:pt-4">
@@ -92,6 +92,15 @@
 				Penggunaan dan transfer informasi yang diterima dari API Google oleh Quly ke aplikasi
 				lain akan mematuhi Google API Services User Data Policy, termasuk persyaratan
 				Penggunaan Terbatas (Limited Use).
+			</p>
+			<p class="mt-3">
+				<strong class="text-slate-900">Limited Use Compliance Statement.</strong> The use of raw
+				or derived user data received from Workspace APIs (Gmail API) will adhere to the Google
+				User Data Policy, including the Limited Use requirements.
+			</p>
+			<p class="mt-3">
+				Penggunaan data pengguna mentah maupun turunan yang diterima dari Workspace APIs (Gmail
+				API) akan mematuhi Google User Data Policy, termasuk persyaratan Limited Use.
 			</p>
 		</div>
 		<p class="mt-3 text-xs leading-6 text-slate-500">
