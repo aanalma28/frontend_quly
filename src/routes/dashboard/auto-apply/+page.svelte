@@ -17,6 +17,8 @@
 	import AutoApplyJobDetailModal from '#lib/components/auto-apply/AutoApplyJobDetailModal.svelte';
 	import DocumentSetup from '#lib/components/auto-apply/DocumentSetup.svelte';
 	import EmailPreviewDrawer from '#lib/components/auto-apply/EmailPreviewDrawer.svelte';
+	import RoleMatchConsentModal from '#lib/components/auto-apply/RoleMatchConsentModal.svelte';
+	import RoleMatchErrorModal from '#lib/components/auto-apply/RoleMatchErrorModal.svelte';
 	import ExtractJobModal from '#lib/components/auto-apply/ExtractJobModal.svelte';
 	import JobChecklist from '#lib/components/auto-apply/JobChecklist.svelte';
 	import {
@@ -28,7 +30,9 @@
 		updateAutoApplyApplicationStatusApi,
 		type AutoApplyApplicationsResponse,
 		type AutoApplyJobOption,
-		type EmailDraftPreview
+		type EmailDraftPreview,
+		type EmailPreviewResponse,
+		type RoleMatchErrorPayload
 	} from '#lib/services/autoApplyApi.js';
 	import {
 		getMyBenefitsApi,
@@ -104,6 +108,18 @@
 	let previewOpen = $state(false);
 	let previews = $state<Record<string, EmailDraftPreview>>({});
 	let preparing = $state(false);
+	let consentQueue = $state<string[]>([]);
+	let consentLoading = $state(false);
+	let consentError = $state<string | null>(null);
+	let matchError = $state<RoleMatchErrorPayload | null>(null);
+	let matchErrorApproving = $state(false);
+	let prepareConsentJobIds = $state<string[]>([]);
+
+	const consentKey = $derived(consentQueue[0] ?? null);
+	const consentOption = $derived(
+		consentKey ? (jobOptions.find((option) => option.key === consentKey) ?? null) : null
+	);
+	const consentPreview = $derived(consentKey ? (previews[consentKey] ?? null) : null);
 
 	let applications = $state<AutoApplyApplicationsResponse | null>(null);
 	let applicationsLoading = $state(false);
@@ -466,15 +482,84 @@
 		showToast('Loker berhasil ditambahkan ke daftar lamaran.');
 	}
 
-	function previewInput(option: AutoApplyJobOption) {
-		if (option.jobId) return { jobId: option.jobId };
+	function previewInput(option: AutoApplyJobOption, crossFieldConsent = false) {
+		const base = option.jobId
+			? { jobId: option.jobId }
+			: {
+					jobTitle: option.jobTitle,
+					companyName: option.companyName,
+					description: option.description,
+					subjectFormat: option.subjectFormat,
+					applicationInstructions: option.applicationInstructions
+				};
 		return {
-			jobTitle: option.jobTitle,
-			companyName: option.companyName,
-			description: option.description,
-			subjectFormat: option.subjectFormat,
-			applicationInstructions: option.applicationInstructions
+			...base,
+			...(selectedPsychotestId ? { psychotestSessionId: selectedPsychotestId } : {}),
+			...(crossFieldConsent ? { crossFieldConsent: true } : {})
 		};
+	}
+
+	function previewStateFromResponse(response: EmailPreviewResponse): EmailDraftPreview {
+		const suitability = response.suitability ?? null;
+		return {
+			subject: response.subject ?? '',
+			body: response.body ?? '',
+			loading: false,
+			error: null,
+			consentRequired: Boolean(response.consentRequired || suitability?.requiresConsent),
+			blocked: Boolean(suitability?.blocked),
+			suitability,
+			crossFieldConsent: Boolean(suitability?.crossFieldAccepted)
+		};
+	}
+
+	function requestConsent(key: string) {
+		if (!previews[key]?.consentRequired) return;
+		consentError = null;
+		consentQueue = [key, ...consentQueue.filter((item) => item !== key)];
+	}
+
+	async function approveConsent() {
+		const key = consentQueue[0];
+		if (!key || consentLoading) return;
+		const option = jobOptions.find((item) => item.key === key);
+		if (!option) {
+			consentQueue = consentQueue.slice(1);
+			return;
+		}
+
+		consentLoading = true;
+		consentError = null;
+		try {
+			const response = await previewEmailApi(previewInput(option, true));
+			const next = previewStateFromResponse(response);
+			previews = { ...previews, [key]: next };
+			if (next.consentRequired) {
+				consentError =
+					'Backend masih meminta persetujuan. Periksa kembali detail lowongan sebelum mencoba lagi.';
+			} else {
+				consentQueue = consentQueue.slice(1);
+			}
+		} catch (error) {
+			consentError = errorText(error, 'Draft lintas bidang belum dapat dibuat.');
+		} finally {
+			consentLoading = false;
+		}
+	}
+
+	function declineConsent() {
+		if (consentLoading) return;
+		consentQueue = consentQueue.slice(1);
+		consentError = null;
+	}
+
+	function closePreview() {
+		if (preparing || consentLoading) return;
+		previewOpen = false;
+		consentQueue = [];
+		consentError = null;
+		matchError = null;
+		prepareConsentJobIds = [];
 	}
 
 	async function openPreview() {
@@ -483,25 +568,24 @@
 			return;
 		}
 		previewOpen = true;
+		consentQueue = [];
+		consentError = null;
+		matchError = null;
+		prepareConsentJobIds = [];
 		const initial: Record<string, EmailDraftPreview> = {};
 		for (const option of selectedOptions) {
 			initial[option.key] = { subject: '', body: '', loading: true, error: null };
 		}
 		previews = initial;
 
+		const consentKeys: string[] = [];
 		await Promise.all(
 			selectedOptions.map(async (option) => {
 				try {
 					const response = await previewEmailApi(previewInput(option));
-					previews = {
-						...previews,
-						[option.key]: {
-							subject: response.subject,
-							body: response.body,
-							loading: false,
-							error: null
-						}
-					};
+					const next = previewStateFromResponse(response);
+					previews = { ...previews, [option.key]: next };
+					if (next.consentRequired) consentKeys.push(option.key);
 				} catch (error) {
 					previews = {
 						...previews,
@@ -515,6 +599,7 @@
 				}
 			})
 		);
+		if (previewOpen) consentQueue = consentKeys;
 	}
 
 	function updatePreview(key: string, field: 'subject' | 'body', value: string) {
@@ -523,15 +608,69 @@
 		previews = { ...previews, [key]: { ...current, [field]: value } };
 	}
 
+	function roleMatchErrorFrom(error: unknown): RoleMatchErrorPayload | null {
+		if (!(error instanceof ApiError)) return null;
+		if (error.code !== 'ROLE_MISMATCH' && error.code !== 'CROSS_FIELD_CONSENT_REQUIRED') {
+			return null;
+		}
+		const payload =
+			typeof error.payload === 'object' && error.payload !== null
+				? (error.payload as Record<string, unknown>)
+				: {};
+		return {
+			statusCode: error.status,
+			code: error.code,
+			message:
+				typeof payload.message === 'string' ? payload.message : error.message,
+			items: Array.isArray(payload.items) ? (payload.items as RoleMatchErrorPayload['items']) : []
+		};
+	}
+
+	async function approvePrepareConsent() {
+		if (!matchError || matchError.code !== 'CROSS_FIELD_CONSENT_REQUIRED' || matchErrorApproving) {
+			return;
+		}
+
+		const keys = (matchError.items ?? [])
+			.map((item) => {
+				const option = selectedOptions.find((candidate) =>
+					item.jobId
+						? candidate.jobId === item.jobId
+						: candidate.jobTitle === item.jobTitle &&
+							candidate.companyName === item.companyName
+				);
+				return option?.jobId ?? option?.key;
+			})
+			.filter((value): value is string => Boolean(value));
+
+		if (keys.length === 0) {
+			showToast('Item yang memerlukan persetujuan tidak ditemukan. Periksa pilihan loker.', 'error');
+			return;
+		}
+
+		prepareConsentJobIds = [...new Set([...prepareConsentJobIds, ...keys])];
+		matchError = null;
+		matchErrorApproving = true;
+		try {
+			await sendApplications();
+		} finally {
+			matchErrorApproving = false;
+		}
+	}
+
 	async function sendApplications() {
 		if (!canPrepare || preparing) return;
 		preparing = true;
+		matchError = null;
 		try {
 			const response = await prepareAutoApplyApi({
 				cvFileId: selectedCvId,
 				...(selectedPsychotestId ? { psychotestSessionId: selectedPsychotestId } : {}),
 				items: selectedOptions.map((option) => {
 					const draft = previews[option.key];
+					const consentKey = option.jobId ?? option.key;
+					const crossFieldConsent =
+						Boolean(draft?.crossFieldConsent) || prepareConsentJobIds.includes(consentKey);
 					return {
 						...(option.jobId
 							? { jobId: option.jobId }
@@ -544,12 +683,15 @@
 								}),
 						recipientEmail: option.recipientEmail.trim().toLowerCase(),
 						...(draft?.subject.trim() ? { emailSubject: draft.subject.trim() } : {}),
-						...(draft?.body.trim() ? { emailBody: draft.body.trim() } : {})
+						...(draft?.body.trim() ? { emailBody: draft.body.trim() } : {}),
+						...(crossFieldConsent ? { crossFieldConsent: true } : {})
 					};
 				})
 			});
 
 			previewOpen = false;
+			consentQueue = [];
+			prepareConsentJobIds = [];
 			activeTab = 'history';
 			applicationsPage = 1;
 			clearSelection();
@@ -564,7 +706,10 @@
 			);
 			void loadBenefits();
 		} catch (error) {
-			if (error instanceof ApiError && error.code === 'BENEFIT_QUOTA_EXHAUSTED') {
+			const roleError = roleMatchErrorFrom(error);
+			if (roleError) {
+				matchError = roleError;
+			} else if (error instanceof ApiError && error.code === 'BENEFIT_QUOTA_EXHAUSTED') {
 				showToast(`${error.message} Top-up kredit terlebih dahulu.`, 'error');
 			} else {
 				showToast(errorText(error, 'Lamaran belum dapat dikirim.'), 'error');
@@ -876,9 +1021,28 @@
 	sending={preparing}
 	totalCredits={creditsRequired}
 	{creditBalance}
-	onclose={() => (previewOpen = false)}
+	onclose={closePreview}
 	onupdate={updatePreview}
+	onconsent={requestConsent}
 	onsend={() => void sendApplications()}
+/>
+
+<RoleMatchConsentModal
+	open={previewOpen && Boolean(consentKey)}
+	option={consentOption}
+	preview={consentPreview}
+	loading={consentLoading}
+	error={consentError}
+	onapprove={() => void approveConsent()}
+	ondecline={declineConsent}
+/>
+
+<RoleMatchErrorModal
+	open={Boolean(matchError)}
+	payload={matchError}
+	approving={matchErrorApproving}
+	onclose={() => (matchError = null)}
+	onapprove={() => void approvePrepareConsent()}
 />
 
 {#if toast}

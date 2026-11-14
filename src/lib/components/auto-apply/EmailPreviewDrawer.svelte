@@ -1,10 +1,12 @@
 <script lang="ts">
 	import {
 		AlertTriangle,
+		Ban,
 		ChevronLeft,
 		ChevronRight,
 		Mail,
 		Send,
+		ShieldAlert,
 		Sparkles,
 		X
 	} from '@lucide/svelte';
@@ -21,6 +23,7 @@
 		creditBalance: number;
 		onclose: () => void;
 		onupdate: (key: string, field: 'subject' | 'body', value: string) => void;
+		onconsent: (key: string) => void;
 		onsend: () => void;
 	}
 
@@ -33,6 +36,7 @@
 		creditBalance,
 		onclose,
 		onupdate,
+		onconsent,
 		onsend
 	}: Props = $props();
 
@@ -48,6 +52,12 @@
 	);
 	const hasDraftError = $derived(
 		options.some((option) => previews[option.key]?.error)
+	);
+	const hasConsentOrBlocked = $derived(
+		options.some((option) => {
+			const preview = previews[option.key];
+			return Boolean(preview?.consentRequired || preview?.blocked);
+		})
 	);
 
 	$effect(() => {
@@ -144,6 +154,10 @@
 								<span class="block max-w-44 truncate text-[9px] opacity-70">{option.companyName}</span>
 								{#if previews[option.key]?.loading}
 									<span class="mt-1 flex items-center gap-1 text-[8px] font-semibold"><Spinner size={10} label="Menyiapkan email" /> Menyiapkan...</span>
+								{:else if previews[option.key]?.blocked}
+									<span class="mt-1 flex items-center gap-1 text-[8px] font-semibold text-rose-600"><Ban size={9} /> Tidak sesuai</span>
+								{:else if previews[option.key]?.consentRequired}
+									<span class="mt-1 flex items-center gap-1 text-[8px] font-semibold text-amber-600"><ShieldAlert size={9} /> Perlu persetujuan</span>
 								{:else if previews[option.key]?.error}
 									<span class="mt-1 block text-[8px] font-semibold text-rose-600">Draft gagal dimuat</span>
 								{:else}
@@ -166,6 +180,82 @@
 							{#if activePreview?.loading}
 								<div class="mt-4 flex items-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-5 text-xs text-indigo-700">
 									<Spinner label="AI menulis email" /> AI sedang menulis subjek & body email...
+								</div>
+							{:else if activePreview?.blocked}
+								<div class="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4">
+									<div class="flex items-start gap-2.5">
+										<span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white text-rose-600">
+											<Ban size={17} />
+										</span>
+										<div>
+											<p class="text-sm font-bold text-rose-900">Tidak dapat dilanjutkan</p>
+											<p class="mt-1 text-[11px] leading-5 text-rose-700">
+												{activePreview.suitability?.reason ??
+													'Lowongan ini memiliki persyaratan yang tidak dapat dipenuhi dari profilmu.'}
+											</p>
+										</div>
+									</div>
+									{#if (activePreview.suitability?.hardBlockers ?? []).length > 0}
+										<div class="mt-3 rounded-lg border border-rose-100 bg-white/70 px-3 py-2">
+											<p class="text-[9px] font-bold uppercase tracking-wide text-rose-700">Hard blocker</p>
+											<ul class="mt-1 list-disc space-y-0.5 pl-4 text-[10px] leading-4 text-rose-800">
+												{#each (activePreview.suitability?.hardBlockers ?? []) as blocker}
+													<li>{blocker}</li>
+												{/each}
+											</ul>
+										</div>
+									{/if}
+									{#if (activePreview.suitability?.missingSkills ?? []).length > 0}
+										<p class="mt-2 text-[10px] leading-4 text-rose-700">
+											<strong>Skill yang belum terpenuhi:</strong>
+											{(activePreview.suitability?.missingSkills ?? []).join(', ')}
+										</p>
+									{/if}
+									{#if activePreview.suitability?.suggestion}
+										<p class="mt-2 text-[10px] leading-4 text-rose-700">
+											<strong>Saran:</strong> {activePreview.suitability.suggestion}
+										</p>
+									{/if}
+									<button
+										type="button"
+										onclick={close}
+										class="mt-3 inline-flex h-8 items-center justify-center rounded-lg border border-rose-200 bg-white px-3 text-[10px] font-semibold text-rose-700 transition hover:bg-rose-100"
+									>
+										Pilih loker lain
+									</button>
+								</div>
+							{:else if activePreview?.consentRequired}
+								<div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+									<div class="flex items-start gap-2.5">
+										<span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-white text-amber-600">
+											<ShieldAlert size={17} />
+										</span>
+										<div>
+											<p class="text-sm font-bold text-amber-900">Persetujuan lintas bidang diperlukan</p>
+											<p class="mt-1 text-[11px] leading-5 text-amber-800">
+												{activePreview.suitability?.reason ??
+													'Profilmu lebih kuat di bidang lain. Setujui untuk membuat draft yang jujur.'}
+											</p>
+										</div>
+									</div>
+									{#if (activePreview.suitability?.missingSkills ?? []).length > 0}
+										<p class="mt-2 text-[10px] leading-4 text-amber-800">
+											<strong>Perlu dipelajari:</strong>
+											{(activePreview.suitability?.missingSkills ?? []).join(', ')}
+										</p>
+									{/if}
+									{#if activePreview.suitability?.suggestion}
+										<p class="mt-1 text-[10px] leading-4 text-amber-800">
+											<strong>Saran:</strong> {activePreview.suitability.suggestion}
+										</p>
+									{/if}
+									<button
+										type="button"
+										onclick={() => onconsent(active.key)}
+										class="mt-3 inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-amber-600 px-3 text-[10px] font-semibold text-white transition hover:bg-amber-700"
+									>
+										<ShieldAlert size={13} /> Tinjau &amp; setujui
+									</button>
 								</div>
 							{:else}
 								{#if activePreview?.error}
@@ -217,6 +307,11 @@
 						{#if hasDraftError}
 							<p class="text-[10px] text-amber-600">Sebagian draft gagal dimuat dan dapat diedit manual.</p>
 						{/if}
+						{#if hasConsentOrBlocked}
+							<p class="text-[10px] text-amber-600">
+								Selesaikan persetujuan lintas bidang atau pilih loker lain sebelum mengirim.
+							</p>
+						{/if}
 					</div>
 					<div class="flex flex-wrap justify-end gap-2">
 						<button type="button" onclick={close} disabled={sending} class="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 px-4 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-60">
@@ -225,7 +320,7 @@
 						<button
 							type="button"
 							onclick={onsend}
-							disabled={sending || loadingReviews || options.length === 0}
+							disabled={sending || loadingReviews || hasConsentOrBlocked || options.length === 0}
 							class="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-4 text-xs font-semibold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
 						>
 							{#if sending}<Spinner label="Mengirim lamaran" />{:else}<Send size={15} />{/if}

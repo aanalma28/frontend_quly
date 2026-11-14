@@ -7,7 +7,8 @@
 		Clock3,
 		MailCheck,
 		RefreshCw,
-		Send
+		Send,
+		ShieldAlert
 	} from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
 	import type {
@@ -61,6 +62,28 @@
 		REPLIED: MailCheck,
 		FAILED: AlertTriangle
 	};
+
+	const severityLabel: Record<string, string> = {
+		NONE: 'Sesuai',
+		LOW: 'Risiko rendah',
+		MEDIUM: 'Lintas bidang',
+		HIGH: 'Tidak sesuai'
+	};
+
+	const severityTone: Record<string, string> = {
+		NONE: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+		LOW: 'bg-sky-50 text-sky-700 ring-sky-200',
+		MEDIUM: 'bg-amber-50 text-amber-700 ring-amber-200',
+		HIGH: 'bg-rose-50 text-rose-700 ring-rose-200'
+	};
+
+	function matchSeverityLabel(value: string | null | undefined): string {
+		return value ? (severityLabel[value] ?? value) : 'Lintas bidang';
+	}
+
+	function matchSeverityTone(value: string | null | undefined): string {
+		return value ? (severityTone[value] ?? severityTone.MEDIUM) : severityTone.MEDIUM;
+	}
 
 	function dateLabel(value: string | null): string {
 		if (!value) return '—';
@@ -126,8 +149,26 @@
 									<span class="rounded-full px-2 py-0.5 text-[9px] font-bold ring-1 ring-inset {statusTone[application.status]}">
 										{statusLabel[application.status]}
 									</span>
+									{#if application.crossField}
+										<span
+											class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold ring-1 ring-inset {matchSeverityTone(application.matchSeverity)}"
+											title={application.matchReason ?? 'Lamaran lintas bidang'}
+										>
+											<ShieldAlert size={10} /> {matchSeverityLabel(application.matchSeverity)}
+										</span>
+									{/if}
 								</div>
 								<p class="mt-0.5 text-xs text-slate-500">{application.companyName}</p>
+								{#if application.matchReason}
+									<p class="mt-1 max-w-2xl text-[10px] leading-4 text-amber-700">
+										{application.matchReason}
+									</p>
+								{/if}
+								{#if application.crossFieldConsentAt}
+									<p class="mt-1 text-[9px] text-slate-400">
+										Persetujuan lintas bidang: {dateLabel(application.crossFieldConsentAt)}
+									</p>
+								{/if}
 								<p class="mt-1 truncate text-[10px] text-slate-400">{application.subject}</p>
 								<p class="mt-1 text-[10px] text-slate-400">HRD: {application.recipientEmail}</p>
 								{#if application.failureReason}

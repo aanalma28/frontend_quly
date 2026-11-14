@@ -126,11 +126,37 @@ export interface EmailPreviewInput {
 	description?: string;
 	subjectFormat?: string;
 	applicationInstructions?: string;
+	psychotestSessionId?: string;
+	crossFieldConsent?: boolean;
+}
+
+export type RoleMatchSeverity = 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | string;
+
+export interface RoleMatchSuitability {
+	matched?: boolean;
+	canProceed?: boolean;
+	requiresConsent?: boolean;
+	blocked?: boolean;
+	severity?: RoleMatchSeverity | null;
+	confidence?: number | null;
+	profileType?: string | null;
+	jobType?: string | null;
+	matchLevel?: string | null;
+	crossField?: boolean;
+	crossFieldAccepted?: boolean;
+	reason?: string | null;
+	matchedSkills?: string[];
+	transferableSkills?: string[];
+	missingSkills?: string[];
+	hardBlockers?: string[];
+	suggestion?: string | null;
 }
 
 export interface EmailPreviewResponse {
-	subject: string;
-	body: string;
+	subject: string | null;
+	body: string | null;
+	consentRequired?: boolean;
+	suitability?: RoleMatchSuitability | null;
 }
 
 export interface EmailDraftPreview {
@@ -138,6 +164,33 @@ export interface EmailDraftPreview {
 	body: string;
 	loading: boolean;
 	error: string | null;
+	consentRequired?: boolean;
+	blocked?: boolean;
+	suitability?: RoleMatchSuitability | null;
+	crossFieldConsent?: boolean;
+}
+
+export interface RoleMatchErrorItem {
+	jobId?: string;
+	jobTitle?: string;
+	companyName?: string;
+	matched?: boolean;
+	canProceed?: boolean;
+	severity?: RoleMatchSeverity | null;
+	confidence?: number | null;
+	reason?: string | null;
+	matchedSkills?: string[];
+	transferableSkills?: string[];
+	missingSkills?: string[];
+	hardBlockers?: string[];
+	suggestion?: string | null;
+}
+
+export interface RoleMatchErrorPayload {
+	statusCode?: number;
+	code?: string;
+	message?: string;
+	items?: RoleMatchErrorItem[];
 }
 
 export async function previewEmailApi(input: EmailPreviewInput): Promise<EmailPreviewResponse> {
@@ -159,6 +212,7 @@ export interface PrepareApplicationItem {
 	applicationInstructions?: string;
 	emailSubject?: string;
 	emailBody?: string;
+	crossFieldConsent?: boolean;
 }
 
 export interface PrepareAutoApplyInput {
@@ -213,6 +267,10 @@ export interface AutoApplyApplication {
 	readAt: string | null;
 	repliedAt: string | null;
 	failureReason: string | null;
+	crossField?: boolean;
+	matchSeverity?: RoleMatchSeverity | null;
+	matchReason?: string | null;
+	crossFieldConsentAt?: string | null;
 	createdAt: string;
 	updatedAt: string;
 }
