@@ -146,4 +146,13 @@ select option:checked {
 		background: #ffffff !important;
 		color: #0f172a !important;
 	}
+
+	#ats-cv-document a {
+		color: inherit !important;
+		text-decoration: none !important;
+	}
+
+	#ats-cv-document section {
+		break-inside: avoid;
+	}
 }
