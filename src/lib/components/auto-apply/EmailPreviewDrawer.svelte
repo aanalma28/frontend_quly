@@ -11,6 +11,7 @@
 		X
 	} from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
+	import AiWorkLeaveConfirm from '#lib/components/auto-apply/AiWorkLeaveConfirm.svelte';
 	import type { AutoApplyJobOption, EmailDraftPreview } from '#lib/services/autoApplyApi.js';
 	import { formatNumber } from '#lib/utils/billing.js';
 
@@ -41,6 +42,7 @@
 	}: Props = $props();
 
 	let activeKey = $state('');
+	let closeConfirmOpen = $state(false);
 
 	const active = $derived(options.find((option) => option.key === activeKey) ?? options[0] ?? null);
 	const activePreview = $derived(active ? previews[active.key] ?? null : null);
@@ -50,6 +52,13 @@
 	const loadingReviews = $derived(
 		options.some((option) => previews[option.key]?.loading)
 	);
+	const hasGeneratedDrafts = $derived(
+		options.some((option) => {
+			const preview = previews[option.key];
+			return Boolean(preview && !preview.loading && (preview.subject.trim() || preview.body.trim()));
+		})
+	);
+
 	const hasDraftError = $derived(
 		options.some((option) => previews[option.key]?.error)
 	);
@@ -75,13 +84,36 @@
 		};
 	});
 
+	$effect(() => {
+		if (!open) closeConfirmOpen = false;
+	});
+
+	$effect(() => {
+		if (typeof window === 'undefined' || !open || (!hasGeneratedDrafts && !loadingReviews)) return;
+		const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+			event.preventDefault();
+			event.returnValue = '';
+		};
+		window.addEventListener('beforeunload', handleBeforeUnload);
+		return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+	});
+
 	function goTo(index: number) {
 		const option = options[index];
 		if (option) activeKey = option.key;
 	}
 
 	function close() {
-		if (sending) return;
+		if (sending || loadingReviews) return;
+		if (hasGeneratedDrafts) {
+			closeConfirmOpen = true;
+			return;
+		}
+		onclose();
+	}
+
+	function confirmClose() {
+		closeConfirmOpen = false;
 		onclose();
 	}
 </script>
@@ -102,7 +134,7 @@
 						Draft ini dibuat AI. Kamu bisa mengedit subjek dan isi sebelum dikirim ke worker.
 					</p>
 				</div>
-				<button type="button" onclick={close} disabled={sending} class="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50" aria-label="Tutup">
+				<button type="button" onclick={close} disabled={sending || loadingReviews} class="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50" aria-label="Tutup">
 					<X size={18} />
 				</button>
 			</header>
@@ -314,7 +346,7 @@
 						{/if}
 					</div>
 					<div class="flex flex-wrap justify-end gap-2">
-						<button type="button" onclick={close} disabled={sending} class="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 px-4 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-60">
+						<button type="button" onclick={close} disabled={sending || loadingReviews} class="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 px-4 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 disabled:opacity-60">
 							Kembali
 						</button>
 						<button
@@ -331,4 +363,13 @@
 			</footer>
 		</aside>
 	</div>
+
+	<AiWorkLeaveConfirm
+		open={closeConfirmOpen}
+		title="Keluar dari review email?"
+		description="Subjek dan body email sudah dibuat AI. Jika keluar sekarang, draft yang sudah dibuat akan hilang dan token atau kredit yang sudah terpakai tidak kembali."
+		confirmLabel="Keluar dari review"
+		onconfirm={confirmClose}
+		oncancel={() => (closeConfirmOpen = false)}
+	/>
 {/if}

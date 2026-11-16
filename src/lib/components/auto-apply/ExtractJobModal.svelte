@@ -13,6 +13,7 @@
 		X
 	} from '@lucide/svelte';
 	import Spinner from '#lib/components/ui/Spinner.svelte';
+	import AiWorkLeaveConfirm from '#lib/components/auto-apply/AiWorkLeaveConfirm.svelte';
 	import {
 		extractExternalJobsApi,
 		type ExternalJobExtractionResult,
@@ -51,6 +52,9 @@
 	let formError = $state<string | null>(null);
 	let usageMessage = $state<string | null>(null);
 	let reanalyseConfirmOpen = $state(false);
+	let leaveConfirmOpen = $state(false);
+
+	const hasExtractedWork = $derived(Boolean(result || results.length > 0));
 
 	const cost = $derived(benefit?.creditCost ?? 2);
 	const accessMode = $derived(
@@ -65,6 +69,16 @@
 		return () => {
 			document.body.style.overflow = previous;
 		};
+	});
+
+	$effect(() => {
+		if (typeof window === 'undefined' || !open || !hasExtractedWork) return;
+		const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+			event.preventDefault();
+			event.returnValue = '';
+		};
+		window.addEventListener('beforeunload', handleBeforeUnload);
+		return () => window.removeEventListener('beforeunload', handleBeforeUnload);
 	});
 
 	function revokePreviews() {
@@ -87,6 +101,7 @@
 		formError = null;
 		usageMessage = null;
 		reanalyseConfirmOpen = false;
+		leaveConfirmOpen = false;
 	}
 
 	function requestReanalyse() {
@@ -106,6 +121,16 @@
 
 	function close() {
 		if (isLoading) return;
+		if (hasExtractedWork) {
+			leaveConfirmOpen = true;
+			return;
+		}
+		reset();
+		onclose();
+	}
+
+	function confirmLeave() {
+		leaveConfirmOpen = false;
 		reset();
 		onclose();
 	}
@@ -676,4 +701,13 @@
 			</div>
 		</div>
 	{/if}
+
+	<AiWorkLeaveConfirm
+		open={leaveConfirmOpen}
+		title="Keluar sebelum menambahkan loker?"
+		description="Hasil ekstraksi loker sudah dibuat dan kuota atau kredit sudah terpakai. Jika keluar sekarang, hasil ini tidak akan ditambahkan ke daftar lamaran dan kuota/kredit tidak kembali."
+		confirmLabel="Keluar tanpa menambahkan"
+		onconfirm={confirmLeave}
+		oncancel={() => (leaveConfirmOpen = false)}
+	/>
 {/if}
