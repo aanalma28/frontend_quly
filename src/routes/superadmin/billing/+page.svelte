@@ -113,6 +113,8 @@
 	let detailError = $state<string | null>(null);
 
 	let quotaTarget = $state<BillingUserItem | null>(null);
+	let quotaDetail = $state<BillingUserDetail | null>(null);
+	let quotaLoading = $state(false);
 	let quotaMonthlyQuota = $state('');
 	let quotaMonthlyUsed = $state('');
 	let quotaTestQuota = $state('');
@@ -121,6 +123,16 @@
 	let quotaCreditBalance = $state('');
 	let quotaResetAt = $state('');
 	let quotaTestResetAt = $state('');
+	let quotaOriginal = $state<{
+		monthlyQuota: string;
+		monthlyUsed: string;
+		monthlyTestQuota: string;
+		monthlyTestUsed: string;
+		paygBalance: string;
+		creditBalance: string;
+		quotaResetAt: string;
+		testQuotaResetAt: string;
+	} | null>(null);
 	let isSavingQuota = $state(false);
 	let quotaError = $state<string | null>(null);
 
@@ -314,20 +326,65 @@
 		detail = null;
 	}
 
-	function openQuota(item: BillingUserItem | null) {
+	function applyQuotaSource(source: BillingUserItem | BillingUserDetail) {
+		const benefits = source.benefitQuotas ?? [];
+		const emailBenefit = benefits.find((benefit) => benefit.code === 'EMAIL_APPLICATION');
+		const psychotestBenefit = benefits.find((benefit) => benefit.code === 'PSYCHOTEST');
+
+		quotaMonthlyQuota = String(emailBenefit?.limit ?? source.quotas.monthlyQuota);
+		quotaMonthlyUsed = String(emailBenefit?.used ?? source.quotas.monthlyUsed);
+		quotaTestQuota = String(psychotestBenefit?.limit ?? source.quotas.monthlyTestQuota);
+		quotaTestUsed = String(psychotestBenefit?.used ?? source.quotas.monthlyTestUsed);
+		quotaPaygBalance = String(source.quotas.paygBalance);
+		quotaCreditBalance = String(source.quotas.creditBalance);
+		quotaResetAt = toDatetimeLocal(
+			emailBenefit?.resetAt ?? source.quotas.quotaResetAt
+		);
+		quotaTestResetAt = toDatetimeLocal(
+			psychotestBenefit?.resetAt ?? source.quotas.testQuotaResetAt
+		);
+		quotaOriginal = {
+			monthlyQuota: quotaMonthlyQuota,
+			monthlyUsed: quotaMonthlyUsed,
+			monthlyTestQuota: quotaTestQuota,
+			monthlyTestUsed: quotaTestUsed,
+			paygBalance: quotaPaygBalance,
+			creditBalance: quotaCreditBalance,
+			quotaResetAt,
+			testQuotaResetAt: quotaTestResetAt
+		};
+	}
+
+	async function openQuota(item: BillingUserItem | null) {
 		if (!item) return;
 		quotaTarget = item;
-		quotaMonthlyQuota = String(effectiveEmailQuota(item, packages).limit);
-		quotaMonthlyUsed = String(item.quotas.monthlyUsed);
-		quotaTestQuota = String(item.quotas.monthlyTestQuota);
-		quotaTestUsed = String(item.quotas.monthlyTestUsed);
-		quotaPaygBalance = String(item.quotas.paygBalance);
-		quotaCreditBalance = String(item.quotas.creditBalance);
-		quotaResetAt = toDatetimeLocal(item.quotas.quotaResetAt);
-		quotaTestResetAt = toDatetimeLocal(item.quotas.testQuotaResetAt);
+		quotaDetail = null;
+		quotaLoading = true;
 		quotaError = null;
+		applyQuotaSource(item);
 		detailOpen = false;
 		detail = null;
+
+		try {
+			const latest = await getBillingUserDetailApi(item.userId);
+			quotaDetail = latest;
+			applyQuotaSource(latest);
+		} catch (error) {
+			quotaError = errorText(
+				error,
+				'Kuota terbaru belum dapat dimuat. Nilai awal memakai data daftar user.'
+			);
+		} finally {
+			quotaLoading = false;
+		}
+	}
+
+	function closeQuota() {
+		if (isSavingQuota) return;
+		quotaTarget = null;
+		quotaDetail = null;
+		quotaOriginal = null;
+		quotaError = null;
 	}
 
 	function openSubscription(item: BillingUserItem | null) {
@@ -379,15 +436,32 @@
 			return;
 		}
 
-		const payload: UpdateUserQuotasInput = {
-			monthlyQuota,
-			monthlyUsed,
-			monthlyTestQuota,
-			monthlyTestUsed,
-			paygBalance,
-			creditBalance
-		};
-		if (quotaResetAt) {
+		const payload: UpdateUserQuotasInput = {};
+		if (!quotaOriginal) {
+			quotaError = 'Nilai awal kuota belum tersedia. Muat ulang data user terlebih dahulu.';
+			return;
+		}
+
+		if (quotaMonthlyQuota !== quotaOriginal.monthlyQuota) {
+			payload.monthlyQuota = monthlyQuota;
+		}
+		if (quotaMonthlyUsed !== quotaOriginal.monthlyUsed) {
+			payload.monthlyUsed = monthlyUsed;
+		}
+		if (quotaTestQuota !== quotaOriginal.monthlyTestQuota) {
+			payload.monthlyTestQuota = monthlyTestQuota;
+		}
+		if (quotaTestUsed !== quotaOriginal.monthlyTestUsed) {
+			payload.monthlyTestUsed = monthlyTestUsed;
+		}
+		if (quotaPaygBalance !== quotaOriginal.paygBalance) {
+			payload.paygBalance = paygBalance;
+		}
+		if (quotaCreditBalance !== quotaOriginal.creditBalance) {
+			payload.creditBalance = creditBalance;
+		}
+
+		if (quotaResetAt && quotaResetAt !== quotaOriginal.quotaResetAt) {
 			const reset = new Date(quotaResetAt);
 			if (Number.isNaN(reset.getTime())) {
 				quotaError = 'Tanggal reset kuota tidak valid.';
@@ -395,7 +469,7 @@
 			}
 			payload.quotaResetAt = reset.toISOString();
 		}
-		if (quotaTestResetAt) {
+		if (quotaTestResetAt && quotaTestResetAt !== quotaOriginal.testQuotaResetAt) {
 			const reset = new Date(quotaTestResetAt);
 			if (Number.isNaN(reset.getTime())) {
 				quotaError = 'Tanggal reset kuota tes tidak valid.';
@@ -404,11 +478,19 @@
 			payload.testQuotaResetAt = reset.toISOString();
 		}
 
+		if (Object.keys(payload).length === 0) {
+			quotaError = 'Tidak ada perubahan kuota yang perlu disimpan.';
+			return;
+		}
+
 		isSavingQuota = true;
 		try {
 			await updateUserQuotasApi(quotaTarget.userId, payload);
 			successMessage = `Kuota ${quotaTarget.email} berhasil diperbarui.`;
 			quotaTarget = null;
+			quotaDetail = null;
+			quotaOriginal = null;
+			quotaError = null;
 			await load();
 		} catch (error) {
 			quotaError = errorText(error, 'Kuota user belum dapat disimpan.');
@@ -1356,57 +1438,100 @@
 	title="Atur Kuota, PAYG & Kredit"
 	description={quotaTarget?.email ?? ''}
 	size="lg"
-	onclose={() => (isSavingQuota ? undefined : (quotaTarget = null))}
+	onclose={closeQuota}
 >
 	{#if quotaTarget}
+		{@const quotaBenefits = quotaDetail?.benefitQuotas ?? quotaTarget.benefitQuotas ?? []}
 		<div class="space-y-4">
 			{#if quotaError}
 				<Alert type="error" message={quotaError} />
 			{/if}
 			<div class="rounded-xl border border-sky-500/20 bg-sky-500/5 p-3 text-[11px] leading-5 text-sky-100/80">
-				Pemakaian tidak boleh melebihi kuota. Kosongkan tanggal reset jika tidak ingin mengubahnya.
+				Nilai awal diambil dari data user di database. Hanya field yang benar-benar diubah yang
+				akan dikirim ke backend. Pemakaian tidak boleh melebihi kuota.
 			</div>
-			<div class="grid gap-4 sm:grid-cols-2">
-				<label class="block space-y-1.5 text-sm font-medium text-slate-300">
-					Kuota bulanan
-					<input type="number" min="0" bind:value={quotaMonthlyQuota} class={inputClass} />
-				</label>
-				<label class="block space-y-1.5 text-sm font-medium text-slate-300">
-					Pemakaian bulanan
-					<input type="number" min="0" bind:value={quotaMonthlyUsed} class={inputClass} />
-				</label>
-				<label class="block space-y-1.5 text-sm font-medium text-slate-300">
-					Kuota tes
-					<input type="number" min="0" bind:value={quotaTestQuota} class={inputClass} />
-				</label>
-				<label class="block space-y-1.5 text-sm font-medium text-slate-300">
-					Pemakaian tes
-					<input type="number" min="0" bind:value={quotaTestUsed} class={inputClass} />
-				</label>
-				<label class="block space-y-1.5 text-sm font-medium text-slate-300">
-					Saldo PAYG
-					<input type="number" min="0" bind:value={quotaPaygBalance} class={inputClass} />
-				</label>
-				<label class="block space-y-1.5 text-sm font-medium text-slate-300">
-					Saldo kredit AI
-					<input type="number" min="0" bind:value={quotaCreditBalance} class={inputClass} />
-				</label>
-				<label class="block space-y-1.5 text-sm font-medium text-slate-300">
-					Reset kuota bulanan
-					<input type="datetime-local" bind:value={quotaResetAt} class={inputClass} />
-				</label>
-				<label class="block space-y-1.5 text-sm font-medium text-slate-300 sm:col-span-2">
-					Reset kuota tes
-					<input type="datetime-local" bind:value={quotaTestResetAt} class={inputClass} />
-				</label>
-			</div>
+
+			{#if quotaLoading}
+				<div class="flex items-center justify-center gap-2 py-10 text-sm text-slate-400">
+					<Spinner label="Memuat kuota user" /> Memuat kuota aktual user...
+				</div>
+			{:else}
+				<div class="grid gap-4 sm:grid-cols-2">
+					<label class="block space-y-1.5 text-sm font-medium text-slate-300">
+						Kuota email lamaran
+						<input type="number" min="0" bind:value={quotaMonthlyQuota} class={inputClass} />
+					</label>
+					<label class="block space-y-1.5 text-sm font-medium text-slate-300">
+						Pemakaian email lamaran
+						<input type="number" min="0" bind:value={quotaMonthlyUsed} class={inputClass} />
+					</label>
+					<label class="block space-y-1.5 text-sm font-medium text-slate-300">
+						Kuota psikotes
+						<input type="number" min="0" bind:value={quotaTestQuota} class={inputClass} />
+					</label>
+					<label class="block space-y-1.5 text-sm font-medium text-slate-300">
+						Pemakaian psikotes
+						<input type="number" min="0" bind:value={quotaTestUsed} class={inputClass} />
+					</label>
+					<label class="block space-y-1.5 text-sm font-medium text-slate-300">
+						Saldo PAYG
+						<input type="number" min="0" bind:value={quotaPaygBalance} class={inputClass} />
+					</label>
+					<label class="block space-y-1.5 text-sm font-medium text-slate-300">
+						Saldo kredit AI
+						<input type="number" min="0" bind:value={quotaCreditBalance} class={inputClass} />
+					</label>
+					<label class="block space-y-1.5 text-sm font-medium text-slate-300">
+						Reset kuota email
+						<input type="datetime-local" bind:value={quotaResetAt} class={inputClass} />
+					</label>
+					<label class="block space-y-1.5 text-sm font-medium text-slate-300">
+						Reset kuota psikotes
+						<input type="datetime-local" bind:value={quotaTestResetAt} class={inputClass} />
+					</label>
+				</div>
+
+				{#if quotaBenefits.length > 0}
+					<div class="rounded-xl border border-slate-700 bg-slate-950/50 p-4">
+						<div>
+							<p class="text-xs font-semibold uppercase tracking-wide text-slate-400">
+								Kuota benefit aktual
+							</p>
+							<p class="mt-1 text-[10px] leading-5 text-slate-500">
+								Nilai ini dibaca langsung dari database user. Form di atas hanya mengubah
+								kuota email/psikotes, PAYG, dan kredit. Kuota benefit lain seperti Generate CV
+								ATS tidak diubah dari form ini.
+							</p>
+						</div>
+						<div class="mt-3 grid gap-2 sm:grid-cols-2">
+							{#each quotaBenefits as benefit}
+								<div class="rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2">
+									<p class="truncate text-[11px] font-semibold text-slate-200" title={benefit.name}>
+										{benefit.name}
+									</p>
+									<p class="mt-0.5 text-[10px] text-slate-500">
+										{benefitQuotaValue(benefit)} tersisa · terpakai
+										{formatNumber(benefitUsed(benefit))}
+									</p>
+									{#if benefit.freeLifetimeLimit > 0}
+										<p class="mt-0.5 text-[10px] text-emerald-300">
+											Lifetime {formatNumber(benefit.freeLifetimeRemaining)} /
+											{formatNumber(benefit.freeLifetimeLimit)}
+										</p>
+									{/if}
+								</div>
+							{/each}
+						</div>
+					</div>
+				{/if}
+			{/if}
 		</div>
 	{/if}
 
 	{#snippet footer()}
 		<button
 			type="button"
-			onclick={() => (quotaTarget = null)}
+			onclick={closeQuota}
 			disabled={isSavingQuota}
 			class="inline-flex h-10 items-center justify-center rounded-lg border border-slate-700 px-4 text-sm font-semibold text-slate-200 transition hover:bg-slate-800 disabled:opacity-60"
 		>
@@ -1415,11 +1540,11 @@
 		<button
 			type="button"
 			onclick={() => void saveQuota()}
-			disabled={isSavingQuota}
+			disabled={isSavingQuota || quotaLoading}
 			class="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-indigo-500 px-4 text-sm font-semibold text-white transition hover:bg-indigo-400 disabled:opacity-60"
 		>
 			{#if isSavingQuota}<Spinner label="Menyimpan kuota" />{/if}
-			Simpan Kuota
+			Simpan Perubahan
 		</button>
 	{/snippet}
 </Modal>
