@@ -128,7 +128,9 @@
 		</p>
 		<ul class="mt-2 list-disc space-y-1 pl-5">
 			<li>Token Gmail disimpan terenkripsi di server dan tidak dikirim ke browser.</li>
-			<li>Izin baca hanya dipakai untuk mendeteksi balasan HRD pada thread lamaran.</li>
+			<li>Quly hanya meminta izin <code class="rounded bg-slate-100 px-1 py-0.5 text-[10px]">gmail.send</code> untuk mengirim email lamaran.</li>
+			<li>Quly tidak meminta akses baca inbox dan tidak membaca email pribadimu.</li>
+			<li>Status balasan HRD ditandai manual dari riwayat Auto-Apply.</li>
 			<li>Kamu dapat memutuskan Gmail kapan saja dari halaman ini.</li>
 			<li>WhatsApp belum terhubung karena endpoint backend belum tersedia.</li>
 		</ul>

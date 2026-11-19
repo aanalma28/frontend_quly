@@ -105,7 +105,8 @@
 			<p class="text-[10px] font-bold uppercase tracking-[0.15em] text-indigo-600">Status lamaran</p>
 			<h2 class="mt-1 text-xl font-bold tracking-tight text-slate-950">Riwayat pengiriman</h2>
 			<p class="mt-1 text-xs text-slate-500">
-				Worker mengirim email di background. Status akan diperbarui otomatis.
+				Worker mengirim email di background. Status terkirim dan dibaca diperbarui otomatis;
+				status dibalas ditandai manual olehmu.
 			</p>
 		</div>
 		<button

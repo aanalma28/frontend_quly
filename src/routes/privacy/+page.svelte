@@ -7,7 +7,7 @@
 	title="Kebijakan Privasi"
 	eyebrow="Privacy Policy"
 	description="Quly menghargai privasi kamu. Halaman ini menjelaskan data apa yang kami kumpulkan, bagaimana data digunakan, dan hak-hak yang kamu miliki."
-	updated="11 November 2026"
+	updated="19 November 2026"
 	active="privacy"
 >
 	<section class="border-b border-slate-100 py-7 first:pt-4">
@@ -48,11 +48,12 @@
 				<ul class="mt-2 list-disc space-y-1 pl-5">
 					<li>membuat atau menyiapkan email lamaran kerja atas namamu;</li>
 					<li>mengirim email lamaran beserta lampiran yang kamu pilih;</li>
-					<li>mencatat status pengiriman dan memantau balasan pada thread lamaran terkait.</li>
+					<li>mencatat status pengiriman email; status balasan ditandai manual olehmu.</li>
 				</ul>
 				<p class="mt-2">
-					Quly tidak menggunakan akses Gmail untuk membaca email pribadi yang tidak berkaitan
-					dengan lamaran kerja, dan tidak menjual atau membagikan isi email kepada pihak lain.
+					Quly hanya meminta izin <code class="rounded bg-slate-100 px-1 py-0.5 text-[10px]">gmail.send</code>
+					untuk mengirim email. Quly tidak meminta akses baca inbox, tidak membaca email
+					pribadi, dan tidak menjual atau membagikan isi email kepada pihak lain.
 				</p>
 			</div>
 
@@ -151,8 +152,8 @@
 			</p>
 			<p>
 				Kamu juga dapat memutuskan koneksi Gmail melalui halaman Integrasi di dashboard Quly.
-				Setelah akses dicabut, fitur pengiriman dan pemantauan lamaran otomatis tidak dapat
-				berjalan sampai kamu menghubungkan ulang Gmail.
+				Setelah akses dicabut, fitur pengiriman lamaran otomatis tidak dapat berjalan sampai
+				kamu menghubungkan ulang Gmail.
 			</p>
 			<p>
 				Untuk pertanyaan tentang data pribadi atau permintaan penghapusan data, hubungi tim
