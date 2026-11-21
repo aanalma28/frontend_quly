@@ -562,6 +562,28 @@
 		prepareConsentJobIds = [];
 	}
 
+	function removeBlockedOption(key: string) {
+		const option = jobOptions.find((item) => item.key === key);
+		if (!option || !previews[key]?.blocked) return;
+
+		const remainingOptions = jobOptions.map((item) =>
+			item.key === key ? { ...item, selected: false } : item
+		);
+		jobOptions = remainingOptions;
+
+		const nextPreviews = { ...previews };
+		delete nextPreviews[key];
+		previews = nextPreviews;
+		consentQueue = consentQueue.filter((item) => item !== key);
+		prepareConsentJobIds = prepareConsentJobIds.filter((item) => item !== key);
+		showToast(
+			`${option.jobTitle} dikeluarkan dari daftar lamaran. Kamu bisa melanjutkan loker lain.`,
+			'info'
+		);
+
+		if (!remainingOptions.some((item) => item.selected)) closePreview();
+	}
+
 	async function openPreview() {
 		if (!canPrepare) {
 			showToast(blockedReason ?? 'Lengkapi persiapan terlebih dahulu.', 'info');
@@ -1024,6 +1046,7 @@
 	onclose={closePreview}
 	onupdate={updatePreview}
 	onconsent={requestConsent}
+	onremove={removeBlockedOption}
 	onsend={() => void sendApplications()}
 />
 

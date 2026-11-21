@@ -25,6 +25,7 @@
 		onclose: () => void;
 		onupdate: (key: string, field: 'subject' | 'body', value: string) => void;
 		onconsent: (key: string) => void;
+		onremove: (key: string) => void;
 		onsend: () => void;
 	}
 
@@ -38,6 +39,7 @@
 		onclose,
 		onupdate,
 		onconsent,
+		onremove,
 		onsend
 	}: Props = $props();
 
@@ -248,12 +250,16 @@
 											<strong>Saran:</strong> {activePreview.suitability.suggestion}
 										</p>
 									{/if}
+									<p class="mt-2 text-[10px] leading-4 text-rose-700">
+										Loker ini tidak dapat dikirim. Keluarkan dari daftar agar lamaran lain bisa
+										dilanjutkan.
+									</p>
 									<button
 										type="button"
-										onclick={close}
-										class="mt-3 inline-flex h-8 items-center justify-center rounded-lg border border-rose-200 bg-white px-3 text-[10px] font-semibold text-rose-700 transition hover:bg-rose-100"
+										onclick={() => onremove(active.key)}
+										class="mt-3 inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-3 text-[10px] font-semibold text-white transition hover:bg-rose-700"
 									>
-										Pilih loker lain
+										<Ban size={13} /> Keluarkan loker ini
 									</button>
 								</div>
 							{:else if activePreview?.consentRequired}
